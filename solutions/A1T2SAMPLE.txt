@@ -1,0 +1,36 @@
+MA	
+Brewster 1	
+Buzzards Bay 1	
+Carver 2	
+Cotuit 1	
+Duxbury 13	
+East Falmouth 2	
+East Freetown 1	
+East Sandwich 1	
+East Wareham 1	
+Eastham 1	
+Halifax 7	
+Hyannis 4	
+Kingston 1	
+Mashpee 4	
+Middleboro 1	
+New Bedford 3	
+North Dartmouth 2	
+Orleans 1	
+Osterville 1	
+Plymouth 4	
+Plympton 2	
+Rochester 1	
+Sandwich 2	
+South Dennis 2	
+Teaticket 1	
+Truro 2	
+Wareham 3	
+West Barnstable 1	
+West Wareham 1	
+MA 67	
+ME	
+Ellsworth 3	
+Hope 1	
+Trenton 1	
+ME 5	

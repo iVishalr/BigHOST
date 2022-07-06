@@ -1,0 +1,64 @@
+services:
+#  hadoop:
+#    build:
+#      context: ..
+#      dockerfile: docker/hadoop.dockerfile
+#    ports:
+#      - "9870:9870"
+#      - "9864:9864"
+#      - "8088:8088"
+#      - "9000:9000"
+#      - "22:22"
+#    container_name: hadoop
+#    volumes:
+#      - ./data:/home/root/data
+
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./db:/data/db
+    container_name: mongodb
+    environment:
+        - MONGO_INITDB_ROOT_USERNAME=root
+        - MONGO_INITDB_ROOT_PASSWORD=root
+        - MONGO_INITDB_DATABASE=db
+
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+    container_name: redis
+    command: redis-server
+
+  rq-worker:
+    build:
+      context: ..
+      dockerfile: docker/rq.dockerfile
+    container_name: rq-worker
+    environment:
+      - RQ_REDIS_URL=redis://redis:6379
+    depends_on:
+        - redis
+    links:
+        - redis
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/flask.dockerfile
+    ports:
+      - "5000:5000"
+    container_name: flask
+    depends_on:
+#      - hadoop
+      - mongodb
+      - redis
+      - rq-worker
+    restart: on-failure
+    links:
+#      - hadoop
+      - mongodb
+      - redis
+      - rq-worker

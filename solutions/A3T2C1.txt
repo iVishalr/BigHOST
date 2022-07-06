@@ -1,0 +1,158 @@
+Afghanistan	1727
+Albania	1831
+Algeria	2367
+Angola	1411
+Argentina	1950
+Armenia	734
+Australia	1922
+Austria	896
+Azerbaijan	400
+Bahamas	661
+Bahrain	511
+Bangladesh	2525
+Belarus	1160
+Belgium	2080
+Benin	1442
+Bolivia	1045
+Bosnia And Herzegovina	1741
+Botswana	346
+Brazil	2217
+Bulgaria	2143
+Burkina Faso	807
+Burma	2515
+Burundi	432
+Cambodia	548
+Cameroon	1712
+Canada	1502
+Central African Republic	465
+Chad	762
+Chile	1665
+China	2321
+Colombia	2075
+Congo	449
+Congo (Democratic Republic Of The)	1757
+Costa Rica	485
+Croatia	1370
+Cuba	2241
+Cyprus	694
+Czech Republic	1205
+Côte D'Ivoire	1827
+Denmark	950
+Djibouti	439
+Dominican Republic	2049
+Ecuador	1632
+Egypt	2569
+El Salvador	1731
+Equatorial Guinea	776
+Eritrea	397
+Estonia	390
+Ethiopia	1563
+Finland	542
+France	3046
+Gabon	756
+Gambia	808
+Georgia	336
+Germany	2070
+Ghana	1641
+Greece	2694
+Guatemala	1988
+Guinea	1292
+Guinea Bissau	472
+Guyana	547
+Haiti	1708
+Honduras	1734
+Hong Kong	490
+Hungary	1912
+India	2532
+Indonesia	2177
+Iran	2375
+Iraq	1639
+Ireland	991
+Israel	2302
+Italy	3150
+Jamaica	1345
+Japan	2077
+Jordan	626
+Kazakhstan	1243
+Kenya	1393
+Laos	597
+Latvia	448
+Lebanon	1472
+Lesotho	334
+Liberia	490
+Libya	2895
+Lithuania	966
+Macedonia	846
+Madagascar	1465
+Malawi	681
+Malaysia	2061
+Mali	1108
+Mauritania	454
+Mauritius	445
+Mexico	2273
+Moldova	963
+Mongolia	118
+Montenegro	506
+Morocco	2912
+Mozambique	1781
+Namibia	417
+Nepal	2151
+Netherlands	2174
+New Zealand	1293
+Nicaragua	1364
+Niger	1021
+Nigeria	1743
+Norway	127
+Oman	403
+Pakistan	2346
+Panama	908
+Papua New Guinea	382
+Paraguay	1597
+Peru	1712
+Philippines	2034
+Poland	1634
+Portugal	2722
+Puerto Rico	1152
+Qatar	528
+Reunion	450
+Romania	2157
+Russia	2259
+Rwanda	392
+Saudi Arabia	1703
+Senegal	1733
+Serbia	1695
+Sierra Leone	786
+Singapore	496
+Slovakia	757
+Slovenia	470
+Somalia	1297
+South Africa	1832
+South Korea	311
+Spain	3152
+Sri Lanka	2349
+Sudan	1634
+Suriname	501
+Swaziland	520
+Sweden	749
+Switzerland	1034
+Syria	2233
+Taiwan	2071
+Tajikistan	476
+Tanzania	1648
+Thailand	2238
+Togo	795
+Tunisia	2410
+Turkey	3137
+Turkmenistan	1064
+Uganda	950
+Ukraine	1911
+United Arab Emirates	1124
+United Kingdom	2877
+United States	3120
+Uruguay	710
+Uzbekistan	1509
+Venezuela	2086
+Vietnam	2102
+Yemen	723
+Zambia	1592
+Zimbabwe	1505

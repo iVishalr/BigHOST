@@ -1,0 +1,124 @@
+FL	
+Alva 14	
+Aventura 32	
+Bay Harbor Islands 5	
+Belle Glade 6	
+Big Pine Key 8	
+Biscayne Park 1	
+Boca Raton 433	
+Bonita Springs 183	
+Boynton Beach 255	
+Cape Coral 1	
+Clewiston 15	
+Coconut Creek 6	
+Conservation 28	
+Coral Gables 16	
+Coral Springs 20	
+Coral Springs-Margate 2	
+Cutler Bay 94	
+Dania 131	
+Davie 48	
+Deerfield Beach 182	
+Delray Beach 257	
+Doral 47	
+El Portal 1	
+Estero 127	
+Fellsmere 29	
+Florida City 8	
+Fort Denaud 1	
+Fort Lauderdale 2267	
+Fort Myers Beach 8	
+Fort Myers 929	
+Fort Pierce 153	
+Glades 2	
+Golden Beach 2	
+Grant 2	
+Greenacres 3	
+Hallandale Beach 22	
+Hallandale 314	
+Haverhill 1	
+Hialeah 1208	
+Hobe Sound 51	
+Hollywood 815	
+Homestead 438	
+Immokalee 32	
+Indiantown 5	
+Islamorada 19	
+Jensen Beach 7	
+Jupiter 95	
+Kenansville 2	
+Key Biscayne 15	
+Key Largo 38	
+Labelle 19	
+Lake Park 1	
+Lake Placid 24	
+Lake Worth Beach 24	
+Lake Worth 346	
+Lantana 1	
+Lauderdale Lakes 4	
+Lauderhill 4	
+Lehigh Acres 282	
+Lorida 3	
+Loxahatchee 13	
+Marathon 18	
+Marco Island 2	
+Margate 5	
+Medley 5	
+Melbourne Beach 1	
+Miami Beach 89	
+Miami Gardens 187	
+Miami Lakes 47	
+Miami Shores 14	
+Miami Springs 7	
+Miami 9764	
+Middle Keys 3	
+Miramar 5	
+Moore Haven 18	
+Naples 193	
+North Bay Village 4	
+North Fort Myers 88	
+North Lauderdale 3	
+North Miami Beach 150	
+North Miami 267	
+North Palm Beach 4	
+North Westside 2	
+Oakland Park 22	
+Ochopee 31	
+Okeechobee 85	
+Opa Locka 398	
+Palm Bay 1	
+Palm Beach Gardens 151	
+Palm City 85	
+Palm Springs 1	
+Palmetto Bay 33	
+Parkland 1	
+Pembroke Pines 60	
+Plantation 7	
+Pompano Beach 484	
+Port Saint Lucie 101	
+Punta Gorda 7	
+Royal Palm Beach 1	
+Sebastian 30	
+Sebring 4	
+South Bay 4	
+South Miami 22	
+South and East Osceola 8	
+Southwest Ranches 1	
+Stuart 30	
+Sunny Isles Beach 16	
+Sunrise 10	
+Surfside 4	
+Sweetwater 2	
+Tamarac 4	
+Tavernier 4	
+Upper Keys 2	
+Venus 4	
+Vero Beach 83	
+Virginia Gardens 1	
+Wellington 16	
+West Miami 4	
+West Palm Beach 832	
+West Park 1	
+Weston 2	
+Wilton Manors 9	
+FL 22536	
