@@ -18,11 +18,7 @@
 
 <configuration>
 <property>
-   <name>fs.defaultFS</name>
-   <value>hdfs://backend:9000</value>
-</property>
-<property>
-    <name>hadoop.tmp.dir</name>
-    <value>hadooptmp/tmp</value>
+    <name>fs.defaultFS</name>
+    <value>hdfs://localhost:9000</value>
 </property>
 </configuration>

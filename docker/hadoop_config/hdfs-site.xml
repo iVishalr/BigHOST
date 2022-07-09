@@ -21,13 +21,14 @@
     <name>dfs.replication</name>
     <value>1</value>
 </property>
+
 <property>
-    <name>dfs.namenode.name.dir</name>
-    <value>/hadoopdata/hdfs/namenode</value>
+    <name>dfs.name.dir</name>
+    <value>/home/root/dfsdata/namenode</value>
 </property>
 
 <property>
-    <name>dfs.datanode.data.dir</name>
-    <value>/hadoopdata/hdfs/datanode</value>
+    <name>dfs.data.dir</name>
+    <value>/home/root/dfsdata/datanode</value>
 </property>
 </configuration>
