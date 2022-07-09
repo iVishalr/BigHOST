@@ -23,7 +23,7 @@ Both the Website's backend and evaluation engine will communicate with each othe
 ## Details on Web portal
 
 <p align="center" padding="100px">
-    <img src="./doc/website-backend.png" alt="website-backend" height="300px" width="300px"></img>
+    <img src="./doc/website-backend.png" alt="website-backend"></img>
 </p>
 
 The webportal will consist of a frontend and a backend. The backend will be used for serving the client requests. The backend will also communicate with the evaluation engine. The website backend will also maintain a direct connection to the MongoDB instance that's running in evaluation server.
@@ -57,7 +57,7 @@ In python this can be done using the `requests` module. In javascript we should 
 The evaluation engine is where the magic happens. We will be using Kubernetes and Docker containers to make the evaluation engine fault tolerant. This will help us prevent downtime and also helps us to process multiple submissions at once in parallel. The following figure shows the rough architecture of the backend.
 
 <p align="center" padding="100px">
-    <img src="./doc/architecture.png" alt="backend-architecture" height="300px" width="300px"></img>
+    <img src="./doc/architecture.png" alt="backend-architecture"></img>
 </p>
 
 #### Job Queuing and Execution Tracker
