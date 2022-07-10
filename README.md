@@ -97,3 +97,32 @@ We need another queue because we have multiple pods running and each one of them
 #### MongoDB
 
 To store everything :)
+
+## Build Steps
+
+To build image, type the following in terminal
+
+```bash
+cd docker
+docker build -t hadoop-3.2.2:0.1 -f hadoop3.dockerfile .
+```
+
+To run the image, type the following in terminal
+
+```bash
+docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+```
+
+To stop and remove the container, type the following in terminal
+
+```bash
+docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q)
+```
+
+To run a MR Job follow the steps given below
+
+1. Build Image
+2. Run the image in docker container
+3. Wait atleast 20 seconds while the docker container finishes setting up hadoop env.
+4. Verify if flask server is running on port 10000 by typing the following command `docker logs hadoop-3.2.2-container`.
+5. Once the flask server is running, in another terminal window type `python3 ./client.py`
