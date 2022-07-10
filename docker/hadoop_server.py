@@ -1,3 +1,4 @@
+from ctypes import Union
 from typing import List, Tuple
 from flask import Flask, jsonify, request
 import json
@@ -7,6 +8,7 @@ import time
 import stat
 import os
 import signal
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -21,6 +23,30 @@ SUBMISSIONS = "submissions"
 
 TASK_OUTPUT_PATH = {"task1":"task-1-output", "task2":"task-2-output"}
 
+class Logger:
+    def __init__(self) -> None:
+        self.logs = []
+    
+    def mark(self, message: str) -> None:
+        now = datetime.now()
+        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
+        msg = f"[{timestamp}]   {message}"
+        self.logs.append(msg)
+
+    def send_logs():
+        pass
+    
+    def display(self) -> None:
+        print("\n".join(self.logs))
+
+    def get_logs(self, as_str=False):
+        if not as_str:
+            return self.logs
+        else:
+            return "\n".join(self.logs)
+
+logger = Logger()
+
 @app.route("/", methods=["GET"])
 def init():
     return jsonify({"response": "Server is Running on "})
@@ -28,26 +54,35 @@ def init():
 @app.route("/run_job", methods=["POST"])
 def run_job():
     
+    logger.mark("Received Hadoop Job Request.")
+
     TEAM_ID = request.form["team_id"]
     ASSIGNMENT_ID = request.form["assignment_id"]
     TIMEOUT = float(request.form["timeout"])
     TASK = request.form["task"]
     
     MAPPER = request.form["mapper"]
-    REDUCER = request.form["reducer"]    
+    REDUCER = request.form["reducer"] 
+
+    logger.mark(f"Starting Hadoop Job. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Task: {TASK}")
 
     job_result = run_hadoop_job(TEAM_ID, ASSIGNMENT_ID, TASK, TIMEOUT, MAPPER, REDUCER)
+
+    logger.mark(f"Hadoop Job Completed. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Task: {TASK}\n")
+
     return jsonify(job_result)
 
 def create_hdfs_directory(dirname: str) -> int:
     process = subprocess.Popen([f"{HDFS} dfs -mkdir {dirname}"], shell=True, text=True)
     res = process.wait()
+    logger.mark(f"Created Directory - hdfs:{dirname}")
     return res
 
 def delete_hdfs_directories(dirname: str) -> int:
     process = subprocess.Popen([f"{HDFS} dfs -rm -r {dirname}"], shell=True, text=True)
-    return process.wait()
-
+    res = process.wait()
+    logger.mark(f"Deleted Directory - hdfs:{dirname}")
+    return res
 
 def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: str):
     """
@@ -64,16 +99,24 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     path = os.path.join(SUBMISSIONS, team_id)
     if not os.path.exists(path):
         os.mkdir(path)
+    
+    logger.mark(f"Created Directory - {path}")
 
     task_path = os.path.join(path, task)
     if not os.path.exists(task_path):
         os.mkdir(task_path)
 
+    logger.mark(f"Created Directory - {task_path}")
+
     with open(os.path.join(task_path, "mapper.py"), "w+") as f:
         f.write(mapper)
     
+    logger.mark(f"Created mapper.py at {os.path.join(task_path, 'mapper.py')}")
+
     with open(os.path.join(task_path, "reducer.py"), "w+") as f:
         f.write(reducer)
+
+    logger.mark(f"Created reducer.py at {os.path.join(task_path, 'reducer.py')}")
 
     st = os.stat(os.path.join(task_path,"mapper.py"))
     os.chmod(os.path.join(task_path,"mapper.py"), st.st_mode | stat.S_IEXEC)
@@ -98,6 +141,9 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     task_path = os.path.join(path, task)
     
     mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}'''
+    
+    logger.mark(f"Spawning Hadoop Process")
+
     mapred_process = subprocess.Popen([
         mapred_job
     ], shell=True, text=True, preexec_fn=os.setsid)
@@ -105,14 +151,20 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     try:
         process_exit_code = job_timer(mapred_process, timeout) # timeout is in seconds
         if process_exit_code == 0:
+            logger.mark(f"Hadoop Process Completed Successfully")
             msg = f"{task} Completed Successfully!"
         else:
+            logger.mark(f"Hadoop Process Failed")
             msg = f"{task} Failed due to : \n{mapred_process.stderr}"
     except RuntimeError:
         process_exit_code = -1
+        logger.mark(f"Hadoop Process Exceeded time limits")
         msg = f"{task} Submission has taken more time than the alloted time. Submission has been killed!"
 
-    res, logs = cleanup(team_id, assignment_id, task)
+    res = cleanup(team_id, assignment_id, task)
+
+    logs = logger.get_logs(True)
+
     res = {"text": msg, "status_code": 200, "logs": logs}
     return res
 
@@ -134,7 +186,7 @@ def job_timer(proc: subprocess.Popen, timeout: int) -> int:
             raise RuntimeError("Process Timed Out")
         time.sleep(interval)
 
-def cleanup(team_id, assign_id, task) -> Tuple:
+def cleanup(team_id, assign_id, task) -> int:
     """
     Safely Removes all the elements that were created for and during evaluation of the code.
 
@@ -148,38 +200,36 @@ def cleanup(team_id, assign_id, task) -> Tuple:
 
     """
 
-    logs = "Deleting user files\n"
+    logger.mark("Deleting user files")
 
     path = os.path.join(SUBMISSIONS, team_id)
 
     task_path = os.path.join(path, task)
-    logs += f"Entering {task_path} directory\n"
+    
+    logger.mark(f"Entering {task_path} directory")
+    
     for files in os.listdir(task_path):
         filename = os.path.join(task_path, files)
         os.remove(filename)
-        logs += f"Removed file {filename}\n"
-    logs += f"Leaving {task_path} directory\n"
+        logger.mark(f"Removed file {filename}")
+    
+    logger.mark(f"Leaving {task_path} directory")
     os.rmdir(task_path)
-    logs += f"Deleted {task_path} directory\n"
+    logger.mark(f"Deleted {task_path} directory")
 
-    logs += f"Leaving {path} directory\n"
+    logger.mark(f"Leaving {path} directory")
     os.rmdir(path)
-    logs += f"Deleted {path} directory\n"
+    logger.mark(f"Deleted {path} directory")
 
-    logs += "Deleting data in HDFS\n"
+    logger.mark("Deleting data in HDFS")
 
     task_path = TASK_OUTPUT_PATH[task]
 
     _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task_path}")
-    logs += f"Removed file /{team_id}/{assign_id}/{task_path}/\n"
-
     _ = delete_hdfs_directories(f"/{team_id}/{assign_id}")
-    logs += f"Removed file /{team_id}/{assign_id}/\n"
-
     _ = delete_hdfs_directories(f"/{team_id}")
-    logs += f"Removed file /{team_id}/\n"
 
-    return 0, logs
+    return 0
 
 def initialize_environment() -> Tuple:
 
