@@ -126,3 +126,18 @@ To run a MR Job follow the steps given below
 3. Wait atleast 20 seconds while the docker container finishes setting up hadoop env.
 4. Verify if flask server is running on port 10000 by typing the following command `docker logs hadoop-3.2.2-container`.
 5. Once the flask server is running, in another terminal window type `python3 ./client.py`
+
+To run job queuing on backend run the following in terminal
+
+```bash
+docker stop dev-redis
+docker rm dev-redis
+docker run --name dev-redis -d -h localhost -p 6379:6379 redis:alpine
+gunicorn -w 4 --preload --bind 127.0.0.1:10001 "job_tracker.tracker:app"
+```
+
+To simulate queueing 10k submissions and retreiving one submission
+
+```bash
+python3 ./client.py
+```
