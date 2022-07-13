@@ -129,6 +129,14 @@ To run a MR Job follow the steps given below (no longer relevant)
 
 ## Running a Evaluation Simulation
 
+#### Setting up Hadoop
+
+```bash
+docker stop hadoop-3.2.2-container
+docker rm hadoop-3.2.2-container
+docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+```
+
 #### Setting up Redis
 
 ```bash
