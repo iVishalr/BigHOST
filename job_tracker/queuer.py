@@ -1,5 +1,5 @@
 from job_tracker.job import Job
-from queues.redisqueue import RedisQueue
+from queues import RedisQueue
 
 import json
 import pickle
@@ -8,7 +8,7 @@ from redis import Redis
 from pprint import pprint
 
 broker = Redis("localhost")
-queue = RedisQueue(broker=broker,queue_name="default")
+queue = RedisQueue(broker=broker, queue_name="jobqueue")
 
 app = Flask(__name__)
 
@@ -45,9 +45,9 @@ def get_job():
     res = {"msg": "dequeued", "len": len(queue), "job": job}
     return jsonify(res)
 
-@app.route("/hello", methods=["GET"])
-def hello():
-    res = {"msg": "hello"}
+@app.route("/queue-length", methods=["GET"])
+def queue_length():
+    res = {"length": len(queue), "queue_name": queue.queue_name}
     return jsonify(res)
 
 @app.route("/empty-queue", methods=["GET"])

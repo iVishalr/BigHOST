@@ -119,7 +119,7 @@ To stop and remove the container, type the following in terminal
 docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q)
 ```
 
-To run a MR Job follow the steps given below
+To run a MR Job follow the steps given below (no longer relevant)
 
 1. Build Image
 2. Run the image in docker container
@@ -127,17 +127,80 @@ To run a MR Job follow the steps given below
 4. Verify if flask server is running on port 10000 by typing the following command `docker logs hadoop-3.2.2-container`.
 5. Once the flask server is running, in another terminal window type `python3 ./client.py`
 
-To run job queuing on backend run the following in terminal
+## Running a Evaluation Simulation
+
+#### Setting up Redis
 
 ```bash
 docker stop dev-redis
 docker rm dev-redis
 docker run --name dev-redis -d -h localhost -p 6379:6379 redis:alpine
-gunicorn -w 4 --preload --bind 127.0.0.1:10001 "job_tracker.tracker:app"
 ```
 
-To simulate queueing 10k submissions and retreiving one submission
+#### Job Queuer
+
+In a new terminal type the following
+
+```bash
+gunicorn -w 2 --preload --bind 127.0.0.1:10001 "job_tracker.queuer:app"
+```
+
+#### Website's Backend
+
+In a new terminal type the following
+
+```bash
+cp -r test/backend.py ./
+gunicorn -w 2 --preload --bind 127.0.0.1:9000 "backend:app"
+```
+
+#### Queue some submissions
+
+To simulate queueing 120 submissions and retreiving one submission, in a new terminal type
 
 ```bash
 python3 ./client.py
 ```
+
+#### Checking queue lengths through browser
+
+Now the we have queued the submissions on website's backend, go to browser and make a GET request to the following routes
+
+```
+http://localhost:9000/queue-length
+http://localhost:10001/queue-length
+```
+
+Now we will have 119 submission on website's backend and 1 submission in evaluation engine's backend.
+
+#### Start Executing submissions
+
+Time to execute these submissions. In a new terminal, type
+
+```bash
+python3 -m job_tracker.executor
+```
+
+This will start executing the jobs on docker container.
+
+Please do not change any configuration in Executor file! Currently there are few issues which needs to be taken care of but, it executes properly.
+
+#### Clear the queues
+
+To clear the queues, in browser make GET requests to
+
+```
+http://localhost:9000/empty-queue
+http://localhost:10001/empty-queue
+```
+
+## Ports Used
+
+1. 10000 - Port that flask server in docker container is running. This port receives all the request for job processing
+2. 9870 - HDFS Datanode WebUI
+3. 8088 - Hadoop Resource Manager UI
+4. 10001 - Job Queuer and Tracker Flask server
+5. 9000 - Website's backend flask server
+6. 6379 - Redis Docker Container
+
+These ports can change in future.
