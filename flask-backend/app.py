@@ -3,6 +3,8 @@ from flask import Flask, request, jsonify
 import sys
 import os
 import subprocess
+from signal import signal, SIGPIPE, SIG_DFL
+signal(SIGPIPE, SIG_DFL)
 
 app = Flask(__name__)
 
@@ -14,7 +16,7 @@ def sanity_check():
     file.save(file.filename)
     process = subprocess.Popen(['pylint', '--disable=I,R,C,W', f'{file.filename}'], stdout=subprocess.PIPE)
     output = process.communicate()[0]
-    print(type(output))
+    #print(type(output))
     os.system(f'rm {file.filename}')
     
     #print(output, file=sys.stderr)
