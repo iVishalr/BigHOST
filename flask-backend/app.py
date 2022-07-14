@@ -12,11 +12,13 @@ def sanity_check():
     file = files['File']
     
     file.save(file.filename)
-    process = subprocess.run(['pylint', '--disable=I,R,C,W', f'{file.filename}'], stdout=subprocess.PIPE)
+    process = subprocess.Popen(['pylint', '--disable=I,R,C,W', f'{file.filename}'], stdout=subprocess.PIPE)
+    output = process.communicate()[0]
+    print(type(output))
     os.system(f'rm {file.filename}')
     
-
-    if "error" in process.stdout.decode('utf-8'):
+    #print(output, file=sys.stderr)
+    if "error" in output.decode('utf-8'):
         message = "Error"
         status_code = 400
     else:
