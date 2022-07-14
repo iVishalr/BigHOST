@@ -1,8 +1,7 @@
 from datetime import datetime
 from time import sleep
-from typing import Any, List
+from typing import List
 from redis import Redis
-from torch import threshold
 from queues.redisqueue import RedisQueue
 from .worker import worker_fn
 
@@ -14,7 +13,18 @@ import signal
 import sys
 
 broker = Redis("localhost")
-queue = RedisQueue(broker, "jobqueue")
+redis_queue = RedisQueue(broker, "jobqueue")
+
+class Tee(object):
+    def __init__(self, *files):
+        self.files = files
+    def write(self, obj):
+        for f in self.files:
+            f.write(obj)
+
+f = open('./logs.txt', 'w+')
+backup = sys.stdout
+sys.stdout = Tee(sys.stdout, f)
 
 class QueueThread(threading.Thread):
     """Thread class with a stop() method. The thread itself has to check
@@ -75,6 +85,7 @@ class ExecutorContext:
         self.workers : List[multiprocessing.Process] = []
         self.prefetch_threads : List[threading.Thread] = []
         self.queue_thread : QueueThread = None
+        self.thread_res = prefetch_factor
 
         if global_queue_thread == True and global_prefetch_thread == False:
             AssertionError(f"global_prefetch_thread needs to be True when global_queue_thread=True, but got global_prefetch_thread={global_prefetch_thread}.")
@@ -90,14 +101,14 @@ class ExecutorContext:
     def spawn_workers(self, target_fn, args=()) -> List:
         workers = []
         for i in range(self.num_workers):
-            print(f"Spawing Worker {i+1}")
+            print(f"[{self.get_datetime()}]\tSpawing Worker {i+1}")
             workers.append(multiprocessing.Process(target=target_fn, args=args))
         return workers
 
     def spawn_prefetch_threads(self, target_fn, args=()) -> List:
         threads = []
         for i in range(self.num_prefetch_threads):
-            print(f"Spawing Thread {i+1}")
+            print(f"[{self.get_datetime()}]\tSpawing Thread {i+1}")
             threads.append(threading.Thread(target=target_fn, args=args))
         return threads
 
@@ -107,28 +118,35 @@ class ExecutorContext:
         return timestamp
 
     def prefetch_fn(self):
+        num_submissions = -1
         request_url = f"http://{self.fetch_ip}:{self.fetch_port}/{self.fetch_route}"
         r = requests.get(request_url, params={"prefetch_factor": self.prefetch_factor})
         if r.status_code != 200:
             print(f"Message : {json.loads(r.text)}")
             print(f"Status Code : {r.status_code}")
         else:
-            print(f"[{self.get_datetime()}] Queued Submission in Job Queue | Current Queue Length : {len(queue)}")
+            res = json.loads(r.text)
+            num_submissions = res["num_submissions"]
+            if num_submissions != 0: 
+                print(f"[{self.get_datetime()}]\tQueued {num_submissions} Submissions in Job Queue | Current Queue Length : {len(redis_queue)}")
+            else:
+                print(f"[{self.get_datetime()}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
         r.close()
+        self.thread_res = num_submissions
 
     def global_queue_fn(self):
         joined = 0
         spawned = 0
+        timeout = 0.25
+        queue_thread_timeout = 2
+        queue_trottled = 0
+
+        initial_prefetch_threads = self.num_prefetch_threads
+
         while not self.global_queue_thread.stopped():
-            queue_length = len(queue)
+            queue_length = len(redis_queue)
 
             if queue_length < self.threshold * 2:
-                if spawned and not joined:
-                    for thread in self.prefetch_threads:
-                        if thread.is_alive():
-                            thread.join()
-                    joined = 1
-                    spawned = 0
 
                 self.prefetch_threads = self.spawn_prefetch_threads(target_fn=self.prefetch_fn)
                 for thread in self.prefetch_threads:
@@ -137,15 +155,36 @@ class ExecutorContext:
                 joined = 0
                 spawned = 1
             
-            if queue_length >= self.threshold * 2 and not joined:
+            if spawned and not joined:
                 for ix, thread in enumerate(self.prefetch_threads):
                     if thread.is_alive():
-                        print(f"Thread-{ix+1}.join()")
                         thread.join()
+                    res = self.thread_res
+                    if res == 0:
+                        timeout += 0.15
+                        queue_thread_timeout += timeout
+                        
+                        if queue_thread_timeout > 60:
+                            queue_thread_timeout = 60
 
+                        queue_trottled = 1
+                        print(f"[{self.get_datetime()}]\tIncreasing Queue Thread Timeout to {queue_thread_timeout}s.")
+                    else:
+                        if queue_trottled:
+                            print(f"[{self.get_datetime()}]\tResetting Queue Threads | Setting prefetch_threads to {initial_prefetch_threads}.")
+                        timeout = 0.15
+                        queue_thread_timeout = 2
+                        queue_trottled = 0
+                        self.num_prefetch_threads = initial_prefetch_threads
+                
                 joined = 1
+                spawned = 0
 
-            sleep(2)
+            if (joined and queue_trottled) and self.num_prefetch_threads > 1:
+                print(f"[{self.get_datetime()}]\tDown throttling Queue Thread | Setting prefetch_threads to 1.")
+                self.num_prefetch_threads = 1
+
+            sleep(queue_thread_timeout)
     
     def global_queue_cleanup(self) -> None:
         for ix, thread in enumerate(self.prefetch_threads):
@@ -167,11 +206,11 @@ class ExecutorContext:
     def global_cleanup(self) -> None:
         
         for ix,workers in enumerate(self.workers):
-            print(f"Terminating Worker {ix+1}")
+            print(f"[{self.get_datetime()}]\tTerminating Worker {ix+1}")
             workers.terminate()
             workers.join()
 
-        print(f"Terminating Queue Thread")
+        print(f"[{self.get_datetime()}]\tTerminating Queue Thread")
         self.global_queue_thread.join(timeout=5)
 
     def local_execute(self, target_fn):
@@ -204,7 +243,7 @@ if __name__ == "__main__":
         global_prefetch_thread=True,
         prefetch_threads=4,
         prefetch_factor=4,
-        threshold=20
+        threshold=5
     )
 
     print(executor.__dict__)

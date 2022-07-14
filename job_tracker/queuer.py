@@ -12,28 +12,36 @@ queue = RedisQueue(broker=broker, queue_name="jobqueue")
 
 app = Flask(__name__)
 
+PORT = 10001
+
 @app.route("/submit-job", methods=["POST"])
 def submit_job():
 
-    TEAM_ID = request.form["team_id"]
-    ASSIGNMENT_ID = request.form["assignment_id"]
-    TIMEOUT = float(request.form["timeout"])
-    TASK = request.form["task"]
-    MAPPER = request.form["mapper"]
-    REDUCER = request.form["reducer"] 
+    submission_data = json.loads(request.data)
 
-    job = Job(  team_id = TEAM_ID,
-                assignment_id = ASSIGNMENT_ID,
-                timeout = TIMEOUT,
-                task = TASK,
-                mapper = MAPPER,
-                reducer = REDUCER,
-            )
+    for i in range(len(submission_data)):
 
-    data = job.__dict__
+        submission = submission_data[i]
 
-    serialized_job = pickle.dumps(data)
-    queue.enqueue(serialized_job)
+        TEAM_ID = submission["team_id"]
+        ASSIGNMENT_ID = submission["assignment_id"]
+        TIMEOUT = float(submission["timeout"])
+        TASK = submission["task"]
+        MAPPER = submission["mapper"]
+        REDUCER = submission["reducer"] 
+
+        job = Job(  team_id = TEAM_ID,
+                    assignment_id = ASSIGNMENT_ID,
+                    timeout = TIMEOUT,
+                    task = TASK,
+                    mapper = MAPPER,
+                    reducer = REDUCER,
+                )
+
+        data = job.__dict__
+
+        serialized_job = pickle.dumps(data)
+        queue.enqueue(serialized_job)
 
     res = {"msg": "Queued", "len": len(queue)}
     return jsonify(res)
@@ -57,4 +65,4 @@ def empty_queue():
     return jsonify(res)
 
 if __name__ == "__main__":
-    app.run()
+    app.run("0.0.0.0", PORT)
