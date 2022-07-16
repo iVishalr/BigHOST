@@ -24,22 +24,21 @@ def sanity_check():
     mapper_data = data["mapper"]
     reducer_data = data['reducer']
 
-    mapper = open('mapper.py', 'w')
+    mapper = open('compile-test/mapper.py', 'w')
     mapper.write(mapper_data)
     mapper.close()
-    reducer = open('reducer.py', 'w')
+    reducer = open('compile-test/reducer.py', 'w')
     reducer.write(reducer_data)
     reducer.close()
 
-    process = subprocess.Popen(['pylint', '--disable=I,R,C,W', 'mapper.py'], stdout=subprocess.PIPE)
-    mapper_output = process.communicate()[0]
-    os.system('rm mapper.py')
-    process = subprocess.Popen(['pylint', '--disable=I,R,C,W', 'reducer.py'], stdout=subprocess.PIPE)
-    reducer_output = process.communicate()[0]
-    os.system('rm reducer.py')
-
-    if "error" in mapper_output.decode('utf-8') or "error" in reducer_output.decode('utf-8'):
-        return jsonify({"msg": "error"})
+    process = subprocess.Popen(['pylint', '--disable=I,R,C,W', 'compile-test/'], stdout=subprocess.PIPE)
+    output = process.communicate()[0]
+    for file in os.listdir('compile-test'):
+        if file.endswith('.py'):
+            os.remove('compile-test/' + file)
+    
+    if "syntax-error" in output.decode('utf-8'):
+        return "error"
 
     return "received"
 
