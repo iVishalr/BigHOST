@@ -1,17 +1,16 @@
-from functools import reduce
-from urllib import response
 from flask import Flask, request, jsonify
-from flask_cors import cross_origin
-import requests
-import sys
 import os
+from queues import RedisQueue
+from flask_cors import cross_origin
 import subprocess
 from signal import signal, SIGPIPE, SIG_DFL
 signal(SIGPIPE, SIG_DFL)
 import json
-
+from redis import Redis
 app = Flask(__name__)
 
+broker = Redis('localhost')
+queue = RedisQueue(broker=broker, queue_name='sanity-queue')
 
 @app.route('/sanity-check', methods=["POST"])
 @cross_origin()
@@ -39,6 +38,8 @@ def sanity_check():
     
     if "syntax-error" in output.decode('utf-8'):
         return "error"
+
+    queue.enqueue(data)
 
     return "received"
 
