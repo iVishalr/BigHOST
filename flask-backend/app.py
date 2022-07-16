@@ -6,6 +6,7 @@ import subprocess
 from signal import signal, SIGPIPE, SIG_DFL
 signal(SIGPIPE, SIG_DFL)
 import json
+import requests
 from redis import Redis
 app = Flask(__name__)
 
@@ -42,6 +43,29 @@ def sanity_check():
     queue.enqueue(data)
 
     return "received"
+
+@app.route('/get-jobs', methods=['GET'])
+@cross_origin()
+def get_jobs():
+    data = json.loads(request.data)
+    # Number of jobs
+    num = data['jobs']
+
+    if queue.is_empty():
+        # TODO
+        pass
+
+    jobs = []
+    if len(queue) <= num:
+        while not queue.is_empty():
+            queue_name, job = queue.dequeue()
+            jobs.append(job)
+    else:
+        for i in range(num):
+            queue_name, job = queue.dequeue()
+            jobs.append(job)
+    
+    requests.post('http://localhost:10001/submit-job', json=jobs)
 
 if __name__ == "__main__":
     app.run(debug=True)
