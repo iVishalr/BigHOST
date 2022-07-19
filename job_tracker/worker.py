@@ -18,6 +18,8 @@ def worker_fn(docker_ip: str, docker_port: int, docker_route: str):
         def write(self, obj):
             for f in self.files:
                 f.write(obj)
+        def flush(self):
+            pass
 
     f = open('./worker_logs.txt', 'w+')
     backup = sys.stdout
@@ -40,11 +42,15 @@ def worker_fn(docker_ip: str, docker_port: int, docker_route: str):
     while True:
         
         if len(queue) == 0:
+            timeout += 0.05
+            interval += timeout
             if interval > 60:
                 interval = 60
-            else:
-                timeout += 0.05
-                interval += timeout
+
+            process_slept = 1
+            print(f"[{get_datetime()}]\tSleeping Worker Process for {interval} seconds.")
+            sleep(interval)
+            continue
         else:
             interval = 0.05
             timeout = 0.05

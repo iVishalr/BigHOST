@@ -1,16 +1,16 @@
-from datetime import datetime
+import sys
+import json
+import signal
+import requests
+import threading
+import multiprocessing
+
 from time import sleep
 from typing import List
 from redis import Redis
-from queues.redisqueue import RedisQueue
 from .worker import worker_fn
-
-import requests
-import multiprocessing
-import threading
-import json
-import signal
-import sys
+from datetime import datetime
+from queues.redisqueue import RedisQueue
 
 broker = Redis("localhost")
 redis_queue = RedisQueue(broker, "jobqueue")
@@ -21,6 +21,8 @@ class Tee(object):
     def write(self, obj):
         for f in self.files:
             f.write(obj)
+    def flush(self):
+        pass
 
 f = open('./logs.txt', 'w+')
 backup = sys.stdout
@@ -85,7 +87,7 @@ class ExecutorContext:
         self.workers : List[multiprocessing.Process] = []
         self.prefetch_threads : List[threading.Thread] = []
         self.queue_thread : QueueThread = None
-        self.thread_res = prefetch_factor
+        self.thread_res = threading.Event()
 
         if global_queue_thread == True and global_prefetch_thread == False:
             AssertionError(f"global_prefetch_thread needs to be True when global_queue_thread=True, but got global_prefetch_thread={global_prefetch_thread}.")
@@ -132,12 +134,15 @@ class ExecutorContext:
             else:
                 print(f"[{self.get_datetime()}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
         r.close()
-        self.thread_res = num_submissions
+        if num_submissions == 0:
+            self.thread_res.set()
+        else:
+            self.thread_res.clear()
 
     def global_queue_fn(self):
         joined = 0
         spawned = 0
-        timeout = 0.25
+        timeout = 0.15
         queue_thread_timeout = 2
         queue_trottled = 0
 
@@ -159,9 +164,9 @@ class ExecutorContext:
                 for ix, thread in enumerate(self.prefetch_threads):
                     if thread.is_alive():
                         thread.join()
-                    res = self.thread_res
-                    if res == 0:
-                        timeout += 0.15
+
+                    if self.thread_res.is_set():
+                        timeout += 0.5
                         queue_thread_timeout += timeout
                         
                         if queue_thread_timeout > 60:
@@ -176,6 +181,7 @@ class ExecutorContext:
                         queue_thread_timeout = 2
                         queue_trottled = 0
                         self.num_prefetch_threads = initial_prefetch_threads
+                        self.thread_res.clear()
                 
                 joined = 1
                 spawned = 0
@@ -211,7 +217,8 @@ class ExecutorContext:
             workers.join()
 
         print(f"[{self.get_datetime()}]\tTerminating Queue Thread")
-        self.global_queue_thread.join(timeout=5)
+        self.global_queue_cleanup()
+        self.global_queue_thread.join(timeout=20)
 
     def local_execute(self, target_fn):
         pass
@@ -254,9 +261,9 @@ if __name__ == "__main__":
 
     def signal_handler(sig, frame):
         executor.cleanup()
-        print('You pressed Ctrl+C!')
+        print(f'[{executor.get_datetime()}]\tEvaluator has been stopped.')
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
-
     executor.execute(worker_fn, args=(docker_ip, docker_port, docker_route))
+    signal.pause()
