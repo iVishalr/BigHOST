@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
+import sys
 import os
-from queues import RedisQueue
+sys.path.append(os.path.join(os.getcwd(), '..'))
+from queues.redisqueue import RedisQueue
 from flask_cors import cross_origin
 import subprocess
 from signal import signal, SIGPIPE, SIG_DFL
@@ -8,10 +10,22 @@ signal(SIGPIPE, SIG_DFL)
 import json
 import requests
 from redis import Redis
-app = Flask(__name__)
+app = Flask(__name__)   
+from pymongo import MongoClient
+from dotenv import load_dotenv
+from pprint import pprint
+load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
 
 broker = Redis('localhost')
 queue = RedisQueue(broker=broker, queue_name='sanity-queue')
+
+client = MongoClient(os.getenv('MONGO_URI'))
+# print(client.list_database_names())
+db = client['bd']
+submissions = db['submissions']
+# print(db.list_collection_names())
+# for post in submissions.find():
+ #   pprint(post)
 
 @app.route('/sanity-check', methods=["POST"])
 @cross_origin()
@@ -31,6 +45,9 @@ def sanity_check():
     reducer.write(reducer_data)
     reducer.close()
 
+    for sub in submissions.find({'teamID': data['teamID']}):
+        pprint(sub)
+
     process = subprocess.Popen(['pylint', '--disable=I,R,C,W', 'compile-test/'], stdout=subprocess.PIPE)
     output = process.communicate()[0]
     for file in os.listdir('compile-test'):
@@ -41,7 +58,7 @@ def sanity_check():
         return "error"
 
     queue.enqueue(data)
-
+    db.findO
     return "received"
 
 @app.route('/get-jobs', methods=['GET'])
@@ -59,11 +76,14 @@ def get_jobs():
     if len(queue) <= num:
         while not queue.is_empty():
             queue_name, job = queue.dequeue()
-            jobs.append(job)
+            if job is not None:
+                jobs.append(job)
+            #jobs.append(job)
     else:
         for i in range(num):
             queue_name, job = queue.dequeue()
-            jobs.append(job)
+            if job is not None:
+                jobs.append(job)
     
     requests.post('http://localhost:10001/submit-job', json=jobs)
 
