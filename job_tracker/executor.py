@@ -98,9 +98,32 @@ class ExecutorContext:
 
         if global_queue_thread == True and global_prefetch_thread == True:
             self.executor_mode = 0
-            print(f"Maintaining a global queue thread and {self.num_prefetch_threads} prefetch threads.")
+            self.executor_mode_desc = f"Maintaining a global queue thread and {self.num_prefetch_threads} prefetch threads."
         else:
-            print(f"Each worker will maintain its own queue thread and a prefetch thread.")
+            self.executor_mode_desc = f"Each worker will maintain its own queue thread and a prefetch thread. (NOT IMPLEMENTED)"
+
+    def __str__(self) -> str:
+        buffer = []
+        buffer.append(f"Executor Context Configuration")
+        buffer.append(f"------------------------------")
+        buffer.append(f"fetch_ip : IP Address of Website's backend = {self.fetch_ip}")
+        buffer.append(f"fetch_port : Website's backend port = {self.fetch_port}")
+        buffer.append(f"fetch_route : Route on website's backend to get submissions = {self.fetch_route}")
+        buffer.append(f"global_queue_thread : Maintains a thread in master process to monitor len(queue) = {self.global_queue_thread}")
+        buffer.append(f"global_prefetch_thread : Spawns prefetch_threads in master process = {self.global_prefetch_thread}")
+        buffer.append(f"num_workers : Number of producers reading from Job Queue = {self.num_workers}")
+        buffer.append(f"num_prefetch_threads : Number of prefetch_threads to spawn for fetching submissions = {self.num_prefetch_threads}")
+        buffer.append(f"threshold : Thershold for fetching next batch of submissions = {self.threshold}")
+        buffer.append(f"executor_mode : ExecutorContext running mode = {self.executor_mode}")
+        buffer.append(f"executor_mode_desc : ExecutorContext Mode Description = {self.executor_mode_desc}")
+        buffer.append(f"workers : Buffer for maintaining pointers to worker processes = {self.workers}")
+        buffer.append(f"prefetch_threads : Buffer for maintaining pointers to prefetch_threads = {self.prefetch_threads}")
+        buffer.append(f"queue_thread : Pointer to global queue thread = {self.queue_thread}")
+        buffer.append(f"thread_res : threading.Event() for prefetch_threads = {self.thread_res}")
+        buffer.append(f"manager : multiprocessing.Manager() object = {self.manager}")
+        buffer.append(f"team_dict : Shared dictionary for tracking dangerous submissions = {self.team_dict}")
+        buffer.append("\n")
+        return "\n".join(buffer)
 
     def spawn_workers(self, target_fn, args=()) -> List:
         workers = []
@@ -208,6 +231,7 @@ class ExecutorContext:
                 print(f"[{self.get_datetime()}] [queue_mt]\tDown throttling Queue Thread | Setting prefetch_threads to 1.")
                 self.num_prefetch_threads = 1
 
+            # print(f"[{self.get_datetime()}] [queue_mt]\tSleeping {queue_thread_timeout:.04f}s.")
             sleep(queue_thread_timeout)
     
     def global_queue_cleanup(self) -> None:
@@ -273,7 +297,7 @@ if __name__ == "__main__":
         threshold=5
     )
 
-    print(executor.__dict__)
+    print(executor)
 
     docker_ip = "localhost"
     docker_port = 10000

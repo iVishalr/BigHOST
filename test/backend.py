@@ -65,7 +65,7 @@ def submit_job():
 
     submission_data = json.loads(request.data)
 
-    print(submission_data)
+    # print(submission_data)
 
     for i in range(len(submission_data)):
 

@@ -4,7 +4,7 @@ ENV HADOOP_HOME /opt/hadoop
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
 RUN apt update && apt install -y ssh rsync vim openjdk-8-jdk openssh-server openssh-client wget htop python3-pip wormhole
-RUN pip install flask
+RUN pip install flask requests
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.2.2/hadoop-3.2.2.tar.gz \
     && tar -xzf hadoop-3.2.2.tar.gz \
@@ -42,5 +42,5 @@ ADD hadoop_config/hadoop-env.sh ${HADOOP_HOME}/etc/hadoop/
 ADD ./Assign2/ /Assign2/
 
 # add new ports here
-EXPOSE 8088 50070 50075 50030 50060 9870 10000
+EXPOSE 8088 50070 50075 50030 50060 9870 10000 19888
 CMD ["python3", "-u", "hadoop_server.py"]

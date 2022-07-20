@@ -1,6 +1,7 @@
 from ctypes import Union
 from typing import List, Tuple
 from flask import Flask, jsonify, request
+import requests
 import json
 import os
 import subprocess
@@ -20,6 +21,8 @@ HADOOP = "/opt/hadoop/bin/hadoop"
 
 PATH_TO_STREAMING = "$HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.2.2.jar"
 SUBMISSIONS = "submissions"
+
+JOBHISTORY_URL = "http://localhost:19888/ws/v1/history/mapreduce/jobs"
 
 TASK_OUTPUT_PATH = {"task1":"task-1-output", "task2":"task-2-output"}
 
@@ -139,8 +142,11 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     #     print(f"Failed to create HDFS Directory : hdfs:{directory}")
 
     task_path = os.path.join(path, task)
+
+    timestamp = str(time.time())
+    job_name = team_id + "_" + assignment_id + "_" + timestamp
     
-    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}'''
+    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.job.name="{job_name}" -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}'''
     
     logger.mark(f"Spawning Hadoop Process")
 
@@ -150,22 +156,40 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
 
     try:
         process_exit_code = job_timer(mapred_process, timeout) # timeout is in seconds
-        if process_exit_code == 0:
-            logger.mark(f"Hadoop Process Completed Successfully")
-            msg = f"{task} Completed Successfully!"
-        else:
-            logger.mark(f"Hadoop Process Failed")
-            msg = f"{task} Failed due to : \n{mapred_process.stderr}"
+        r = requests.get(JOBHISTORY_URL)
+        data = json.loads(r.text)
+        jobs = data["jobs"]["job"]
+        
+        current_job = jobs[-1]
+        job_output = None
+        status = None
+        if current_job["name"] == job_name:
+            if current_job["state"] == "SUCCEEDED":
+                logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully")
+                msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully!"
+                job_output = "Good Job!"
+                status = current_job["state"]
+            elif current_job["state"] == "FAILED":
+                logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed")
+                msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed."
+                # job_output = mapred_process.communicate()[0]
+                # job_err = mapred_process.communicate()[1]
+                status = current_job["state"]
+                job_output = "Something is wrong in input files."
+            else:
+                job_output = "God knows what you are doing!"
+                status = "KILLED"
+
     except RuntimeError:
-        process_exit_code = -1
-        logger.mark(f"Hadoop Process Exceeded time limits")
-        msg = f"{task} Submission has taken more time than the alloted time. Submission has been killed!"
+        logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Exceeded time limits")
+        msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Submission has taken more time than the alloted time. Submission has been killed!"
+        status = "KILLED"
 
     res = cleanup(team_id, assignment_id, task)
 
-    logs = logger.get_logs(True)
+    logs = logger.get_logs(as_str=True)
 
-    res = {"text": msg, "status_code": 200, "logs": logs}
+    res = {"text": msg, "status_code": 200, "job_output": job_output, "status": status}
     return res
 
 def job_timer(proc: subprocess.Popen, timeout: int) -> int:
@@ -281,3 +305,4 @@ if __name__ == "__main__":
         print("Hadoop Environment could not be setup.")
         print(f"Error Log :\n{error_logs}")
         exit(1)
+        # hadoop job -list | egrep '^job' | awk '{print $1}' | xargs -n 1 -I {} sh -c "hadoop job -status {} | egrep '^tracking' | awk '{print \$3}'" | xargs -n 1 -I{} sh -c "echo -n {} | sed 's/.*jobid=//'; echo -n ' ';curl -s -XGET {} | grep 'Job Name' | sed 's/.* //' | sed 's/<br>//'"

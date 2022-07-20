@@ -1,5 +1,6 @@
 import sys
 import time
+import json
 import pickle
 import requests
 
@@ -68,18 +69,15 @@ def worker_fn(rank: int, team_dict: dict, docker_ip: str, docker_port: int, dock
         queue_name, serialized_job = queue_data
         job = pickle.loads(serialized_job)
         start = time.time()
-        try:
-            key = job["team_id"]+"_"+job["assignment_id"]
-            if key not in team_dict:
-                team_dict[key] = 0
-            team_dict[key] += 1
-            r = requests.post(request_url, data=job)
-            team_dict[key] -= 1
-            print(f"[{get_datetime()}] [worker_{rank}]\t{key} Job completed Successfully | Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
-        except requests.exceptions.RequestException as e:
-            print(f"[{get_datetime()}] [worker_{rank}]\t{e}. {key.split('_')[0]} is a potential blacklist.")
+        # try:
+        key = job["team_id"]+"_"+job["assignment_id"]
+        if key not in team_dict:
+            team_dict[key] = 0
+        team_dict[key] += 1
+        r = requests.post(request_url, data=job)
+        res = json.loads(r.text)
+        team_dict[key] -= 1
+        print(f"[{get_datetime()}] [worker_{rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
+        # except requests.exceptions.RequestException as e:
+        #     print(f"[{get_datetime()}] [worker_{rank}]\t{e}. {key.split('_')[0]} is a potential blacklist.")
         r.close()
-
-
-    print(f"[{get_datetime()}] [worker_{rank}]\tWorker Stopped.")
-    sys.exit(0)
