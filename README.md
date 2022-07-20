@@ -110,7 +110,7 @@ docker build -t hadoop-3.2.2:0.1 -f hadoop3.dockerfile .
 To run the image, type the following in terminal
 
 ```bash
-docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
 ```
 
 To stop and remove the container, type the following in terminal
@@ -134,7 +134,7 @@ To run a MR Job follow the steps given below (no longer relevant)
 ```bash
 docker stop hadoop-3.2.2-container
 docker rm hadoop-3.2.2-container
-docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
 ```
 
 #### Setting up Redis
@@ -178,7 +178,7 @@ http://localhost:9000/queue-length
 http://localhost:10001/queue-length
 ```
 
-Now we will have 119 submission on website's backend and 1 submission in evaluation engine's backend.
+<!-- Now we will have 119 submission on website's backend and 1 submission in evaluation engine's backend. -->
 
 #### Start Executing submissions
 
@@ -209,5 +209,6 @@ http://localhost:10001/empty-queue
 4. 10001 - Job Queuer and Tracker Flask server
 5. 9000 - Website's backend flask server
 6. 6379 - Redis Docker Container
+7. 19888 - JobHistoryServer
 
 These ports can change in future.
