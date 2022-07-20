@@ -11,7 +11,7 @@ import json
 import requests
 from redis import Redis
 app = Flask(__name__)   
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from dotenv import load_dotenv
 from pprint import pprint
 load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
@@ -20,12 +20,9 @@ broker = Redis('localhost')
 queue = RedisQueue(broker=broker, queue_name='sanity-queue')
 
 client = MongoClient(os.getenv('MONGO_URI'))
-# print(client.list_database_names())
 db = client['bd']
 submissions = db['submissions']
-# print(db.list_collection_names())
-# for post in submissions.find():
- #   pprint(post)
+
 
 @app.route('/sanity-check', methods=["POST"])
 @cross_origin()
@@ -55,10 +52,11 @@ def sanity_check():
             os.remove('compile-test/' + file)
     
     if "syntax-error" in output.decode('utf-8'):
+        doc = submissions.find_one_and_update({'teamId': data['teamID']}, {'$set': {'assignmentId': {'submissionId': {'submissionMarks': 0, 'submissionMessage': 'Syntax Error'}}}}, return_document=ReturnDocument.AFTER)
         return "error"
 
     queue.enqueue(data)
-    db.findO
+    
     return "received"
 
 @app.route('/get-jobs', methods=['GET'])
@@ -69,8 +67,7 @@ def get_jobs():
     num = data['jobs']
 
     if queue.is_empty():
-        # TODO
-        pass
+        return None
 
     jobs = []
     if len(queue) <= num:
