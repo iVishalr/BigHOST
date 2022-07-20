@@ -10,7 +10,7 @@ print(r.status_code)
 
 url = "http://127.0.0.1:9000/submit-job"
 
-data = {'team_id': 'BD_019_536_571_589', 
+data = {'team_id': 'BD_019_536_571_000', 
         'assignment_id': 'A1', 
         'mapper': None, 
         'reducer': None, 
@@ -24,12 +24,19 @@ with open("./test/m.py", "r") as f:
 with open("./test/r.py", "r") as f:
     data['reducer'] = f.read()
 
-data = [data]
-data = json.dumps(data)
-
-for i in range(5):
-    # data["task"] = data["task"][:-1] + str(i)
-    r = requests.post(url, data=data)
+for i in range(50):
+    team_id = data["team_id"]
+    team_id = team_id.split("_")
+    last_srn = int(team_id[-1])
+    last_srn += 1
+    last_srn = str(last_srn)
+    last_srn = "0" * (3-len(last_srn)) + last_srn
+    team_id[-1] = last_srn
+    data["team_id"] = "_".join(team_id)
+    print(f"Team ID : {data['team_id']}")
+    payload = [data]
+    payload = json.dumps(payload)
+    r = requests.post(url, data=payload)
     print(f"{i+1} {r.status_code}")
     res = json.loads(r.text)
     print(res)

@@ -150,7 +150,7 @@ docker run --name dev-redis -d -h localhost -p 6379:6379 redis:alpine
 In a new terminal type the following
 
 ```bash
-gunicorn -w 2 --preload --bind 127.0.0.1:10001 "job_tracker.queuer:app"
+gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:10001 "job_tracker.queuer:app"
 ```
 
 #### Website's Backend
@@ -158,8 +158,7 @@ gunicorn -w 2 --preload --bind 127.0.0.1:10001 "job_tracker.queuer:app"
 In a new terminal type the following
 
 ```bash
-cp -r test/backend.py ./
-gunicorn -w 2 --preload --bind 127.0.0.1:9000 "backend:app"
+gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:9000 "test.backend:app"
 ```
 
 #### Queue some submissions

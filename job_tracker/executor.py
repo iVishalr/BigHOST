@@ -6,7 +6,7 @@ import threading
 import multiprocessing
 
 from time import sleep
-from typing import List
+from typing import Dict, List
 from redis import Redis
 from .worker import worker_fn
 from datetime import datetime
@@ -88,6 +88,8 @@ class ExecutorContext:
         self.prefetch_threads : List[threading.Thread] = []
         self.queue_thread : QueueThread = None
         self.thread_res = threading.Event()
+        self.manager = multiprocessing.Manager()
+        self.team_dict : Dict[str: int] = self.manager.dict()
 
         if global_queue_thread == True and global_prefetch_thread == False:
             AssertionError(f"global_prefetch_thread needs to be True when global_queue_thread=True, but got global_prefetch_thread={global_prefetch_thread}.")
@@ -102,15 +104,31 @@ class ExecutorContext:
 
     def spawn_workers(self, target_fn, args=()) -> List:
         workers = []
+        num_args = len(args)
+
         for i in range(self.num_workers):
-            print(f"[{self.get_datetime()}]\tSpawing Worker {i+1}")
+            print(f"[{self.get_datetime()}] [master_p]\tSpawing Worker {i+1}")
+            if len(args) < num_args+1:
+                args = list(args)
+                args = tuple([i+1] + args)
+            else:
+                args = list(args)
+                args[0] = i+1
+                args = tuple(args) # add ranks to processes
             workers.append(multiprocessing.Process(target=target_fn, args=args))
         return workers
 
     def spawn_prefetch_threads(self, target_fn, args=()) -> List:
         threads = []
+        num_args = len(args)
         for i in range(self.num_prefetch_threads):
-            print(f"[{self.get_datetime()}]\tSpawing Thread {i+1}")
+            print(f"[{self.get_datetime()}] [master_p]\tSpawing Thread {i+1}")
+            if len(args) < num_args+1:
+                args = tuple([i+1]+list(args))
+            else:
+                args = list(args)
+                args[0] = i+1
+                args = tuple(args)
             threads.append(threading.Thread(target=target_fn, args=args))
         return threads
 
@@ -119,7 +137,7 @@ class ExecutorContext:
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
 
-    def prefetch_fn(self):
+    def prefetch_fn(self, rank):
         num_submissions = -1
         request_url = f"http://{self.fetch_ip}:{self.fetch_port}/{self.fetch_route}"
         r = requests.get(request_url, params={"prefetch_factor": self.prefetch_factor})
@@ -130,9 +148,9 @@ class ExecutorContext:
             res = json.loads(r.text)
             num_submissions = res["num_submissions"]
             if num_submissions != 0: 
-                print(f"[{self.get_datetime()}]\tQueued {num_submissions} Submissions in Job Queue | Current Queue Length : {len(redis_queue)}")
+                print(f"[{self.get_datetime()}] [prefet_{rank}]\tQueued {num_submissions} Submissions in Job Queue | Current Queue Length : {len(redis_queue)}")
             else:
-                print(f"[{self.get_datetime()}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
+                print(f"[{self.get_datetime()}] [prefet_{rank}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
         r.close()
         if num_submissions == 0:
             self.thread_res.set()
@@ -173,10 +191,10 @@ class ExecutorContext:
                             queue_thread_timeout = 60
 
                         queue_trottled = 1
-                        print(f"[{self.get_datetime()}]\tIncreasing Queue Thread Timeout to {queue_thread_timeout}s.")
+                        print(f"[{self.get_datetime()}] [queue_mt]\tIncreasing Queue Thread Timeout to {queue_thread_timeout:.04f}s.")
                     else:
                         if queue_trottled:
-                            print(f"[{self.get_datetime()}]\tResetting Queue Threads | Setting prefetch_threads to {initial_prefetch_threads}.")
+                            print(f"[{self.get_datetime()}] [queue_mt]\tResetting Queue Threads | Setting prefetch_threads to {initial_prefetch_threads}.")
                         timeout = 0.15
                         queue_thread_timeout = 2
                         queue_trottled = 0
@@ -187,7 +205,7 @@ class ExecutorContext:
                 spawned = 0
 
             if (joined and queue_trottled) and self.num_prefetch_threads > 1:
-                print(f"[{self.get_datetime()}]\tDown throttling Queue Thread | Setting prefetch_threads to 1.")
+                print(f"[{self.get_datetime()}] [queue_mt]\tDown throttling Queue Thread | Setting prefetch_threads to 1.")
                 self.num_prefetch_threads = 1
 
             sleep(queue_thread_timeout)
@@ -195,7 +213,7 @@ class ExecutorContext:
     def global_queue_cleanup(self) -> None:
         for ix, thread in enumerate(self.prefetch_threads):
             if thread.is_alive():
-                print(f"Force Thread-{ix+1}.join()")
+                print(f"[{self.get_datetime()}] [master_p]\tForce Thread-{ix+1}.join()")
                 thread.join()
 
         self.global_queue_thread.stop()
@@ -211,12 +229,14 @@ class ExecutorContext:
     
     def global_cleanup(self) -> None:
         
-        for ix,workers in enumerate(self.workers):
-            print(f"[{self.get_datetime()}]\tTerminating Worker {ix+1}")
-            workers.terminate()
-            workers.join()
+        for ix, workers in enumerate(self.workers):
+            print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}")
+            if workers.is_alive():
+                workers.terminate()
+                workers.join()
+                workers.close()
 
-        print(f"[{self.get_datetime()}]\tTerminating Queue Thread")
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
         self.global_queue_cleanup()
         self.global_queue_thread.join(timeout=20)
 
@@ -261,9 +281,9 @@ if __name__ == "__main__":
 
     def signal_handler(sig, frame):
         executor.cleanup()
-        print(f'[{executor.get_datetime()}]\tEvaluator has been stopped.')
+        print(f'[{executor.get_datetime()}] [master_p]\tEvaluator has been stopped.')
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
-    executor.execute(worker_fn, args=(docker_ip, docker_port, docker_route))
+    executor.execute(worker_fn, args=(executor.team_dict, docker_ip, docker_port, docker_route))
     signal.pause()
