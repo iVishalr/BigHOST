@@ -3,6 +3,9 @@ import time
 import json
 import pickle
 import requests
+import threading
+from typing import List
+import signal
 
 from time import sleep
 from redis import Redis
@@ -10,7 +13,7 @@ from datetime import datetime
 from queues.redisqueue import RedisQueue
 
 
-def worker_fn(rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str):
+def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
     class Tee(object):
         def __init__(self, *files):
@@ -21,7 +24,7 @@ def worker_fn(rank: int, team_dict: dict, docker_ip: str, docker_port: int, dock
         def flush(self):
             pass
 
-    f = open(f'./worker{rank}_logs.txt', 'w+')
+    f = open(f'./worker{worker_rank}_logs.txt', 'w+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
 
@@ -30,54 +33,86 @@ def worker_fn(rank: int, team_dict: dict, docker_ip: str, docker_port: int, dock
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
 
-    broker = Redis("localhost")
+    broker = Redis("localhost", port=6380)
     queue = RedisQueue(broker, "jobqueue")
 
     request_url = f"http://{docker_ip}:{docker_port}/{docker_route}"
 
-    interval = 0.05
-    timeout = 0.05
-    process_slept = 0
+    def thread_fn(rank, event: threading.Event):
+        interval = 0.05
+        timeout = 0.05
+        process_slept = 0
+        print("begining to process")
+        while not event.is_set():
+            print("obtaining length of queue")
+            queue_length = len(queue)
+            print("done obtaining length of queue")
+            if queue_length == 0:
+                timeout += 0.05
+                interval += timeout
+                if interval > 60:
+                    interval = 60
 
-    while True:
-        if len(queue) == 0:
-            timeout += 0.05
-            interval += timeout
-            if interval > 60:
-                interval = 60
+                process_slept = 1
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tSleeping Worker Process for {interval:.04f} seconds.")
+                sleep(interval)
+                continue
+            else:
+                print("obtained length of queue")
+                interval = 0.05
+                timeout = 0.05
+                if process_slept:
+                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tWaking up Worker Process.")
+                    process_slept = 0
 
-            process_slept = 1
-            print(f"[{get_datetime()}] [worker_{rank}]\tSleeping Worker Process for {interval:.04f} seconds.")
-            sleep(interval)
-            continue
-        else:
-            interval = 0.05
-            timeout = 0.05
-            if process_slept:
-                print(f"[{get_datetime()}] [worker_{rank}]\tWaking up Worker Process.")
-                process_slept = 0
+            print("dequeuing")
+            queue_data = queue.dequeue()
+            print("dequeued")
 
-        queue_data = queue.dequeue()
+            if queue_data is None:
+                process_slept = 1
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tSleeping Worker Process for {interval:.04f} seconds.")
+                sleep(interval)
+                continue
 
-        if queue_data is None:
-            process_slept = 1
-            print(f"[{get_datetime()}] [worker_{rank}]\tSleeping Worker Process for {interval:.04f} seconds.")
+            queue_name, serialized_job = queue_data
+            job = pickle.loads(serialized_job)
+            start = time.time()
 
-            sleep(interval)
-            continue
+            key = job["team_id"]+"_"+job["assignment_id"]
+            if key not in team_dict:
+                team_dict[key] = 0
+            team_dict[key] += 1
+            r = requests.post(request_url, data=job)
+            res = json.loads(r.text)
+            team_dict[key] -= 1
+            print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
 
-        queue_name, serialized_job = queue_data
-        job = pickle.loads(serialized_job)
-        start = time.time()
-        # try:
-        key = job["team_id"]+"_"+job["assignment_id"]
-        if key not in team_dict:
-            team_dict[key] = 0
-        team_dict[key] += 1
-        r = requests.post(request_url, data=job)
-        res = json.loads(r.text)
-        team_dict[key] -= 1
-        print(f"[{get_datetime()}] [worker_{rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
-        # except requests.exceptions.RequestException as e:
-        #     print(f"[{get_datetime()}] [worker_{rank}]\t{e}. {key.split('_')[0]} is a potential blacklist.")
-        r.close()
+            r.close()
+    
+    threads : List[threading.Thread] = []
+    thread_events : List[threading.Event] = []
+    
+    for i in range(num_threads):
+        e = threading.Event()
+        t = threading.Thread(target=thread_fn, args=(i+1,e,))
+        threads.append(t)
+        thread_events.append(e)
+
+    print(f"[{get_datetime()}] [worker_{worker_rank}]\tStarting {num_threads} threads.")
+    for t in threads:
+        t.start()
+
+    def signal_handler(sig, frame):
+        print(f'[{get_datetime()}] [worker_{worker_rank}]\tStopping.')
+        for i in thread_events:
+            i.set()
+        for i in threads:
+            i.join()
+        for i in threads:
+            if i.is_alive():
+                i.join()
+        broker.close()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)

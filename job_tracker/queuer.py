@@ -7,7 +7,7 @@ from flask import Flask, request, jsonify
 from redis import Redis
 from pprint import pprint
 
-broker = Redis("localhost")
+broker = Redis("localhost", port=6380)
 queue = RedisQueue(broker=broker, queue_name="jobqueue")
 
 app = Flask(__name__)

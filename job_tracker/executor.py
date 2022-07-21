@@ -12,7 +12,7 @@ from .worker import worker_fn
 from datetime import datetime
 from queues.redisqueue import RedisQueue
 
-broker = Redis("localhost")
+broker = Redis("localhost", port=6380)
 redis_queue = RedisQueue(broker, "jobqueue")
 
 class Tee(object):
@@ -55,6 +55,7 @@ class ExecutorContext:
         prefetch_threads: int = 2,
         prefetch_factor: int = 2,
         threshold: int = 16,
+        num_backends: int = 8
         ) -> None:
 
         """
@@ -69,9 +70,11 @@ class ExecutorContext:
         `prefetch_threads` : int - This option is used only if `global_prefetch_thread = True`. Specifies the number of threads to fetch new submissions. 
         `prefetch_factor` : int - Number of submissions to be returned per request.
         `threshold` : int - The threshold for starting to fetch new submissions. Threshold indicates a certain queue length. 
+        `num_backends` : int - Specifies the number of backend workers.
         """
 
         self.num_workers = num_workers
+        self.num_backends = num_backends
         self.global_queue_thread = global_queue_thread
         self.global_prefetch_thread = global_prefetch_thread
         self.num_prefetch_threads = prefetch_threads
@@ -90,6 +93,10 @@ class ExecutorContext:
         self.thread_res = threading.Event()
         self.manager = multiprocessing.Manager()
         self.team_dict : Dict[str: int] = self.manager.dict()
+
+        assert num_backends % num_workers == 0, "num_backends must be completely divisible by num_workers"
+
+        self.num_threads = num_backends // num_workers
 
         if global_queue_thread == True and global_prefetch_thread == False:
             AssertionError(f"global_prefetch_thread needs to be True when global_queue_thread=True, but got global_prefetch_thread={global_prefetch_thread}.")
@@ -125,6 +132,11 @@ class ExecutorContext:
         buffer.append("\n")
         return "\n".join(buffer)
 
+    def signal_handler(self,sig, frame):
+        self.cleanup()
+        print(f'[{executor.get_datetime()}] [master_p]\tEvaluator has been stopped.')
+        sys.exit(0)
+
     def spawn_workers(self, target_fn, args=()) -> List:
         workers = []
         num_args = len(args)
@@ -138,7 +150,8 @@ class ExecutorContext:
                 args = list(args)
                 args[0] = i+1
                 args = tuple(args) # add ranks to processes
-            workers.append(multiprocessing.Process(target=target_fn, args=args))
+            workers.append(multiprocessing.Process(target=target_fn, args=args, daemon=True))
+        assert len(workers) == self.num_workers, "Unable to start all workers"
         return workers
 
     def spawn_prefetch_threads(self, target_fn, args=()) -> List:
@@ -244,25 +257,32 @@ class ExecutorContext:
 
     def global_execute(self, target_fn, args=None) -> None:
         # spawn a queue thread in master process
+        for signame in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT, signal.SIGCHLD]:
+            signal.signal(signame, signal.SIG_DFL)
+
         self.global_queue_thread = QueueThread(target=self.global_queue_fn)
         self.global_queue_thread.start()
         # spawn multiple processes that read from the queue
         self.workers = self.spawn_workers(target_fn=target_fn, args=args)
         for workers in self.workers:
             workers.start()
+
+        for signame in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT, signal.SIGCHLD]:
+            signal.signal(signame, self.signal_handler)
     
     def global_cleanup(self) -> None:
-        
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
         for ix, workers in enumerate(self.workers):
             print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}")
             if workers.is_alive():
-                workers.terminate()
+                # workers.terminate()
                 workers.join()
-                workers.close()
+                # workers.close()
 
         print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
         self.global_queue_cleanup()
         self.global_queue_thread.join(timeout=20)
+        broker.close()
 
     def local_execute(self, target_fn):
         pass
@@ -294,7 +314,8 @@ if __name__ == "__main__":
         global_prefetch_thread=True,
         prefetch_threads=4,
         prefetch_factor=4,
-        threshold=5
+        threshold=5,
+        num_backends=1
     )
 
     print(executor)
@@ -303,11 +324,5 @@ if __name__ == "__main__":
     docker_port = 10000
     docker_route = "run_job"
 
-    def signal_handler(sig, frame):
-        executor.cleanup()
-        print(f'[{executor.get_datetime()}] [master_p]\tEvaluator has been stopped.')
-        sys.exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    executor.execute(worker_fn, args=(executor.team_dict, docker_ip, docker_port, docker_route))
+    executor.execute(worker_fn, args=(executor.team_dict, docker_ip, docker_port, docker_route, executor.num_threads))
     signal.pause()

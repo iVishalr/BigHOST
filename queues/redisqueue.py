@@ -10,11 +10,11 @@ class RedisQueue:
         return
 
     def dequeue(self):
-        return self.broker.blpop(self.queue_name, 1)
+        return self.broker.blpop(self.queue_name, 5)
 
     def empty_queue(self):
         while self.__len__() > 0:
-            _ = self.broker.blpop(self.queue_name, 1)
+            _ = self.broker.blpop(self.queue_name, 5)
     
     def is_empty(self) -> bool:
         return True if self.__len__() == 0 else False
