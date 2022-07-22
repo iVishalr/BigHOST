@@ -23,6 +23,12 @@ client = MongoClient(os.getenv('MONGO_URI'))
 db = client['bd']
 submissions = db['submissions']
 
+def delete_files():
+    for file in os.listdir('compile-test'):
+        if file.endswith('.py'):
+            os.remove('compile-test/' + file)
+    
+
 
 @app.route('/sanity-check', methods=["POST"])
 @cross_origin()
@@ -38,21 +44,36 @@ def sanity_check():
     mapper = open('compile-test/mapper.py', 'w')
     mapper.write(mapper_data)
     mapper.close()
+    mapper = open('compile-test/mapper.py', 'r')
+    mapper_content = mapper.readlines()
+    if mapper_content[0].strip() != '#!/usr/bin/env python3':
+        delete_files()
+        return "mapper shebang not present"
+    mapper.close()
+
     reducer = open('compile-test/reducer.py', 'w')
     reducer.write(reducer_data)
     reducer.close()
+    reducer = open('compile-test/reducer.py', 'r')
+    reducer_content = reducer.readlines()
+    if reducer_content[0].strip() != '#!/usr/bin/env python3':
+        delete_files()
+        return "reducer shebang not present"
+    reducer.close()
 
-    for sub in submissions.find({'teamID': data['teamID']}):
+    for sub in submissions.find({'teamId': data['teamId']}):
         pprint(sub)
 
     process = subprocess.Popen(['pylint', '--disable=I,R,C,W', 'compile-test/'], stdout=subprocess.PIPE)
     output = process.communicate()[0]
-    for file in os.listdir('compile-test'):
-        if file.endswith('.py'):
-            os.remove('compile-test/' + file)
     
+    delete_files()
+
     if "syntax-error" in output.decode('utf-8'):
-        doc = submissions.find_one_and_update({'teamId': data['teamID']}, {'$set': {'assignmentId': {'submissionId': {'submissionMarks': 0, 'submissionMessage': 'Syntax Error'}}}}, return_document=ReturnDocument.AFTER)
+        doc = submissions.find_one({'teamId': data['teamId']})
+        doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = -1
+        doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = 'test'
+        doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
         return "error"
 
     queue.enqueue(data)
@@ -85,4 +106,4 @@ def get_jobs():
     requests.post('http://localhost:10001/submit-job', json=jobs)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
