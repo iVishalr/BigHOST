@@ -146,44 +146,44 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     timestamp = str(time.time())
     job_name = team_id + "_" + assignment_id + "_" + timestamp
     
-    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.job.name="{job_name}" -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}'''
-    
+    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}'''
+    print(mapred_job)
     logger.mark(f"Spawning Hadoop Process")
 
     mapred_process = subprocess.Popen([
         mapred_job
     ], shell=True, text=True, preexec_fn=os.setsid)
 
-    try:
-        process_exit_code = job_timer(mapred_process, timeout) # timeout is in seconds
-        r = requests.get(JOBHISTORY_URL)
-        data = json.loads(r.text)
-        jobs = data["jobs"]["job"]
-        
-        current_job = jobs[-1]
-        job_output = None
-        status = None
-        if current_job["name"] == job_name:
-            if current_job["state"] == "SUCCEEDED":
-                logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully")
-                msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully!"
-                job_output = "Good Job!"
-                status = current_job["state"]
-            elif current_job["state"] == "FAILED":
-                logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed")
-                msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed."
-                # job_output = mapred_process.communicate()[0]
-                # job_err = mapred_process.communicate()[1]
-                status = current_job["state"]
-                job_output = "Something is wrong in input files."
-            else:
-                job_output = "God knows what you are doing!"
-                status = "KILLED"
+    # process_exit_code = job_timer(mapred_process, timeout+10) # timeout is in seconds
+    process_exit_code = mapred_process.wait()
+    r = requests.get(JOBHISTORY_URL)
+    data = json.loads(r.text)
+    jobs = data["jobs"]["job"]
+    
+    current_job = jobs[-1]
+    job_output = None
+    status = None
 
-    except RuntimeError:
+    if current_job["name"] == job_name:
+        if current_job["state"] == "SUCCEEDED":
+            logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully")
+            msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully!"
+            job_output = "Good Job!"
+            status = current_job["state"]
+        
+        elif current_job["state"] == "FAILED":
+            logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed")
+            msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed."
+            status = current_job["state"]
+            job_output = "God knows what you are doing! Something is wrong in input files :("
+            
+    else:
+        print(f"\n\nJob {job_name} was not recorded in Job History Server\n\n")
         logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Exceeded time limits")
         msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Submission has taken more time than the alloted time. Submission has been killed!"
+        job_output = "God knows what you are doing!"
         status = "KILLED"
+        # restart_hadoop_environment()
 
     res = cleanup(team_id, assignment_id, task)
 
@@ -206,8 +206,9 @@ def job_timer(proc: subprocess.Popen, timeout: int) -> int:
         if process_result is not None:
             return process_result
         if time.time() >= end:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-            raise RuntimeError("Process Timed Out")
+            os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+            break
+            # raise RuntimeError("Process Timed Out")
         time.sleep(interval)
 
 def cleanup(team_id, assign_id, task) -> int:
@@ -255,7 +256,34 @@ def cleanup(team_id, assign_id, task) -> int:
 
     return 0
 
-def initialize_environment() -> Tuple:
+def restart_hadoop_environment():
+    
+    hadoop_restart_process = subprocess.Popen([
+        "$HADOOP_HOME/sbin/stop-all.sh"
+    ], shell=True, text=True)
+    process_code = hadoop_restart_process.wait()
+
+    hadoop_restart_process = subprocess.Popen([
+        "$HADOOP_HOME/sbin/mr-jobhistory-daemon.sh stop historyserver"
+    ], shell=True, text=True)
+    process_code = hadoop_restart_process.wait()
+
+    hadoop_initializer_process = subprocess.Popen(["bash /restart-hadoop.sh"], shell=True, text=True)
+    process_code = hadoop_initializer_process.wait()
+
+    jps_process = subprocess.Popen(["jps"], shell=True, text=True, stdout=subprocess.PIPE)
+    process_code = jps_process.wait()
+
+    if process_code != 0:
+        error_logs += "jps Process : \n" + jps_process.stderr + "\n\n"
+        return process_code, error_logs
+
+    process_stdout = jps_process.communicate()[0]
+    print(process_stdout)
+    res = process_stdout.strip()
+    res = len(res.split("\n"))
+
+def initialize_environment(add_dataset=True) -> Tuple:
 
     error_logs = ""
 
@@ -282,14 +310,15 @@ def initialize_environment() -> Tuple:
         error_logs += "jps Process : Not all Hadoop Processes have been started."
         return 1, error_logs
 
-    os.mkdir(SUBMISSIONS)
+    if add_dataset:
+        os.mkdir(SUBMISSIONS)
 
-    # following stuff is temporary. Only for testing purposes.
-    _ = create_hdfs_directory("/A1")
-    _ = create_hdfs_directory("/A1/input")
+        # following stuff is temporary. Only for testing purposes.
+        _ = create_hdfs_directory("/A1")
+        _ = create_hdfs_directory("/A1/input")
 
-    p = subprocess.Popen([f"{HDFS} dfs -put /Assign2/datasets/dataset_1percent.txt /A1/input"], shell=True, text=True)
-    _ = p.wait()
+        p = subprocess.Popen([f"{HDFS} dfs -put /Assign2/datasets/dataset_1percent.txt /A1/input"], shell=True, text=True)
+        _ = p.wait()
     
     return 0, error_logs 
 
@@ -306,3 +335,4 @@ if __name__ == "__main__":
         print(f"Error Log :\n{error_logs}")
         exit(1)
         # hadoop job -list | egrep '^job' | awk '{print $1}' | xargs -n 1 -I {} sh -c "hadoop job -status {} | egrep '^tracking' | awk '{print \$3}'" | xargs -n 1 -I{} sh -c "echo -n {} | sed 's/.*jobid=//'; echo -n ' ';curl -s -XGET {} | grep 'Job Name' | sed 's/.* //' | sed 's/<br>//'"
+        # hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.2.2.jar -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="bev" -D mapreduce.task.timeout=20000 -mapper "/submissions/BD_019_536_571_001/task1/mapper.py" -reducer "'/submissions/BD_019_536_571_001/task1/reducer.py' '/submissions/BD_019_536_571_001/task1/v'" -input "/A1/input/dataset_1percent.txt" -output "BD_019_536_571_001/output5"

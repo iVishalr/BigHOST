@@ -10,6 +10,8 @@ from time import sleep
 from typing import List
 from datetime import datetime
 
+from torch import threshold
+
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
     class Tee(object):
@@ -38,6 +40,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
         interval = 0.05
         timeout = 0.05
         process_slept = 0
+        blacklist_threshold = 3
         # print("begining to process")
         while not event.is_set():
             # print("obtaining length of queue")
@@ -78,11 +81,19 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             key = job["team_id"]+"_"+job["assignment_id"]
             if key not in team_dict:
                 team_dict[key] = 0
+            
             team_dict[key] += 1
             r = requests.post(request_url, data=job)
             res = json.loads(r.text)
-            team_dict[key] -= 1
-            print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
+            
+            if res['status'] != "KILLED":
+                team_dict[key] -= 1
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
+            else:
+                if team_dict[key] <= blacklist_threshold:
+                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
+                else:
+                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}. Team : {job['team_id']} is blacklisted.")
 
             r.close()
     
