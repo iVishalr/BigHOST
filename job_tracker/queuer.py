@@ -1,14 +1,9 @@
-from job_tracker.job import Job
-from queues import RedisQueue
-
 import json
 import pickle
-from flask import Flask, request, jsonify
-from redis import Redis
-from pprint import pprint
 
-broker = Redis("localhost", port=6380)
-queue = RedisQueue(broker=broker, queue_name="jobqueue")
+from job_tracker import queue
+from job_tracker.job import Job
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 

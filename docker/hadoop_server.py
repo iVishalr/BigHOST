@@ -1,6 +1,3 @@
-from ctypes import Union
-from typing import List, Tuple
-from flask import Flask, jsonify, request
 import requests
 import json
 import os
@@ -9,7 +6,10 @@ import time
 import stat
 import os
 import signal
+
 from datetime import datetime
+from typing import List, Tuple
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 

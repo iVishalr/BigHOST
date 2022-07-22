@@ -1,5 +1,5 @@
 from re import L
-from redis import Redis
+from redis import Redis, ConnectionPool
 from job_tracker import Job
 from queues.redisqueue import RedisQueue
 from flask import Flask, request, jsonify
@@ -8,7 +8,8 @@ import json
 import pickle
 import requests
 
-broker = Redis("localhost")
+pool = ConnectionPool(host='localhost', port=6379, db=0)
+broker = Redis(connection_pool=pool)
 queue = RedisQueue(broker, "submissionqueue")
 
 app = Flask(__name__)

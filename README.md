@@ -105,6 +105,7 @@ To build image, type the following in terminal
 ```bash
 cd docker
 docker build -t hadoop-3.2.2:0.1 -f hadoop3.dockerfile .
+cd ..
 ```
 
 To run the image, type the following in terminal
@@ -129,6 +130,8 @@ To run a MR Job follow the steps given below (no longer relevant)
 
 ## Running a Evaluation Simulation
 
+Note : You should be in project root directory
+
 #### Setting up Hadoop
 
 ```bash
@@ -140,9 +143,9 @@ docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 --name hadoop
 #### Setting up Redis
 
 ```bash
-docker stop dev-redis
-docker rm dev-redis
-docker run --name dev-redis -d -h localhost -p 6379:6379 redis:alpine
+docker stop redis-stack-server
+docker rm redis-stack-server
+docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
 ```
 
 #### Job Queuer

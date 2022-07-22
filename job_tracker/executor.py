@@ -7,13 +7,11 @@ import multiprocessing
 
 from time import sleep
 from typing import Dict, List
-from redis import Redis
 from .worker import worker_fn
 from datetime import datetime
-from queues.redisqueue import RedisQueue
 
-broker = Redis("localhost", port=6380)
-redis_queue = RedisQueue(broker, "jobqueue")
+from job_tracker import queue as redis_queue
+from job_tracker import broker
 
 class Tee(object):
     def __init__(self, *files):
@@ -262,6 +260,8 @@ class ExecutorContext:
 
         self.global_queue_thread = QueueThread(target=self.global_queue_fn)
         self.global_queue_thread.start()
+
+        sleep(5)
         # spawn multiple processes that read from the queue
         self.workers = self.spawn_workers(target_fn=target_fn, args=args)
         for workers in self.workers:
