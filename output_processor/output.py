@@ -5,7 +5,7 @@ import signal
 import filecmp
 import requests
 import threading
-
+import pickle
 from time import sleep
 from typing import List
 from datetime import datetime
@@ -24,7 +24,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
         def flush(self):
             pass
 
-    def get_datetime() -> str:
+    def get_datetime() -> str:  
         now = datetime.now()
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
@@ -39,10 +39,10 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
     FILEPATH = os.path.join(os.getcwd(), 'output')
     CORRECT_OUTPUT = os.path.join(os.getcwd(), 'correct_output')
 
-    def thread_fn():
+    def thread_fn(rank, event: threading.Event):
         interval = 0.05
         timeout = 0.05
-
+        process_slept = 0
         while not event.is_set():
 
             if len(queue)==0:
@@ -73,7 +73,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
                 continue
 
             queue_name, serialized_data = output_data
-            data = json.loads(serialized_data)
+            data = pickle.loads(serialized_data)
 
             teamId = data['team_id']
             assignmentId = data['assignment_id']
@@ -84,8 +84,10 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
             # If status is false, directly put 0
-            if not status == "FAILED":
+            if status == "FAILED":
                 doc = submissions.find_one({'teamId': teamId})
+                print(f'Doc: {doc}')
+                print(teamId, assignmentId, status, submissionId, message)
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})

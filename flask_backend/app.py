@@ -68,7 +68,7 @@ def createApp():
         for submission in jobs:
             # data = json.loads(request.data)
             data = submission
-
+            update_submission(marks=-1, message='testing', data=data)
             mapper_data = data["mapper"]
             reducer_data = data['reducer']
             mapper_name = f"{data['teamId']}-{data['assignmentId']}-mapper.py"

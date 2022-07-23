@@ -1,6 +1,6 @@
 import json
 import pickle
-
+from output_processor import queue as output_queue
 from job_tracker import queue
 from job_tracker.job import Job
 from flask import Flask, request, jsonify
@@ -58,6 +58,12 @@ def queue_length():
 def empty_queue():
     queue.empty_queue()
     res = {"msg": "Queue Emptied"}
+    return jsonify(res)
+
+@app.route("/empty-output-queue", methods=["GET"])
+def empty_output_queue():
+    output_queue.empty_queue()
+    res = {"msg": "Output Queue Emptied"}
     return jsonify(res)
 
 if __name__ == "__main__":
