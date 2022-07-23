@@ -10,8 +10,6 @@ from time import sleep
 from typing import List
 from datetime import datetime
 
-from torch import threshold
-
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
     class Tee(object):
@@ -41,11 +39,11 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
         timeout = 0.05
         process_slept = 0
         blacklist_threshold = 3
-        # print("begining to process")
+
         while not event.is_set():
-            # print("obtaining length of queue")
+
             queue_length = len(queue)
-            # print("done obtaining length of queue")
+
             if queue_length == 0:
                 timeout += 0.05
                 interval += timeout
@@ -57,16 +55,13 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 sleep(interval)
                 continue
             else:
-                # print("obtained length of queue")
                 interval = 0.05
                 timeout = 0.05
                 if process_slept:
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tWaking up Worker Process.")
                     process_slept = 0
 
-            # print("dequeuing")
             queue_data = queue.dequeue()
-            # print("dequeued")
 
             if queue_data is None:
                 process_slept = 1
