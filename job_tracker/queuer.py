@@ -18,17 +18,18 @@ def submit_job():
 
         submission = submission_data[i]
 
-        TEAM_ID = submission["team_id"]
-        ASSIGNMENT_ID = submission["assignment_id"]
+        TEAM_ID = submission["teamId"]
+        ASSIGNMENT_ID = submission["assignmentId"]
+        SUBMISSION_ID = submission['submissionId']
         TIMEOUT = float(submission["timeout"])
-        TASK = submission["task"]
+        # TASK = submission["task"]
         MAPPER = submission["mapper"]
         REDUCER = submission["reducer"] 
 
         job = Job(  team_id = TEAM_ID,
                     assignment_id = ASSIGNMENT_ID,
                     timeout = TIMEOUT,
-                    task = TASK,
+                    submission_id = SUBMISSION_ID,
                     mapper = MAPPER,
                     reducer = REDUCER,
                 )

@@ -2,7 +2,7 @@ class Job:
     team_id: str = None
     assignment_id: str = None
     timeout: int = 120
-    task: str = "task1"
+    submission_id: str = "submissionId1"
     mapper: bytes = None
     reducer: bytes = None
 
@@ -16,7 +16,7 @@ class Job:
         buffer.append(f"Team ID : {self.team_id}")
         buffer.append(f"Assignment ID : {self.assignment_id}")
         buffer.append(f"Timeout : {self.timeout}")
-        buffer.append(f"Task : {self.task}")
+        buffer.append(f"Submission ID : {self.submission_id}")
         buffer.append(f"Mapper : {self.mapper}\n")
         buffer.append(f"Reducer : {self.reducer}\n")
         return "\n".join(buffer)

@@ -75,29 +75,31 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
             queue_name, serialized_data = output_data
             data = json.loads(serialized_data)
 
-            teamId = data['teamId']
-            assignmentId = data['assignmentId']
+            teamId = data['team_id']
+            assignmentId = data['assignment_id']
             status = data['status']
-            submissionId = data['submissionId']
+            submissionId = data['submission_id']
             message = data["job_output"]
+
+            FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
             # If status is false, directly put 0
             if not status == "FAILED":
-                doc = submissions.find_one({'teamId': data['teamId']})
-                doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = 0
-                doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
-                doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+                doc = submissions.find_one({'teamId': teamId})
+                doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
+                doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
+                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
             else:
                 # Has given outuput, need to check if it is corect
-                output = filecmp.cmp(os.path.join(FILEPATH, teamId, submissionId), os.path.join(CORRECT_OUTPUT, assignmentId))
-                doc = submissions.find_one({'teamId': data['teamId']})
+                output = filecmp.cmp(os.path.join(FILEPATH_TEAM), os.path.join(CORRECT_OUTPUT, assignmentId))
+                doc = submissions.find_one({'teamId': teamId})
                 if output:
-                    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = 1
-                    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = 'Passed'
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
                 else:
-                    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = 0
-                    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = 'Failed'
-                doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
+                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
 
     #end of thread_fn
     threads : List[threading.Thread] = []

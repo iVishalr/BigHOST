@@ -9,6 +9,7 @@ import signal
 from time import sleep
 from typing import List
 from datetime import datetime
+from job_tracker import output_queue
 
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
@@ -80,8 +81,12 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             team_dict[key] += 1
             r = requests.post(request_url, data=job)
             res = json.loads(r.text)
+            res['team_id'] = job['team_id']
+            res['assignment_id'] = job['assignment_id']
+            res['submission_id'] = job['submission_id']
+            serialized_job = pickle.dumps(res)
             
-            if res['status'] != "KILLED":
+            if res['status'] != "FAILED":
                 team_dict[key] -= 1
                 print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}")
             else:
@@ -89,7 +94,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
                 else:
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}. Team : {job['team_id']} is blacklisted.")
-
+            output_queue.enqueue(serialized_job)
             r.close()
     
     threads : List[threading.Thread] = []

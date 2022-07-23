@@ -24,7 +24,9 @@ SUBMISSIONS = "submissions"
 
 JOBHISTORY_URL = "http://localhost:19888/ws/v1/history/mapreduce/jobs"
 
-TASK_OUTPUT_PATH = {"task1":"task-1-output", "task2":"task-2-output"}
+TASK_OUTPUT_PATH = {"A1T1":"task-1-output", "A1T2":"task-2-output"}
+
+FILEPATH = os.path.join(os.getcwd(), 'output')
 
 class Logger:
     def __init__(self) -> None:
@@ -62,16 +64,16 @@ def run_job():
     TEAM_ID = request.form["team_id"]
     ASSIGNMENT_ID = request.form["assignment_id"]
     TIMEOUT = float(request.form["timeout"])
-    TASK = request.form["task"]
+    SUBMISSION_ID = request.form["submission_id"]
     
     MAPPER = request.form["mapper"]
     REDUCER = request.form["reducer"] 
 
-    logger.mark(f"Starting Hadoop Job. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Task: {TASK}")
+    logger.mark(f"Starting Hadoop Job. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Submission ID: {SUBMISSION_ID}")
 
-    job_result = run_hadoop_job(TEAM_ID, ASSIGNMENT_ID, TASK, TIMEOUT, MAPPER, REDUCER)
+    job_result = run_hadoop_job(TEAM_ID, ASSIGNMENT_ID, SUBMISSION_ID, TIMEOUT, MAPPER, REDUCER)
 
-    logger.mark(f"Hadoop Job Completed. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Task: {TASK}\n")
+    logger.mark(f"Hadoop Job Completed. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Submission ID: {SUBMISSION_ID}\n")
 
     return jsonify(job_result)
 
@@ -87,7 +89,7 @@ def delete_hdfs_directories(dirname: str) -> int:
     logger.mark(f"Deleted Directory - hdfs:{dirname}")
     return res
 
-def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: str):
+def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, reducer: str):
     """
     Arguments
     ---------
@@ -105,7 +107,7 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     
     logger.mark(f"Created Directory - {path}")
 
-    task_path = os.path.join(path, task)
+    task_path = os.path.join(path, submission_id)
     if not os.path.exists(task_path):
         os.mkdir(task_path)
 
@@ -141,12 +143,12 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
     # if res != 0:
     #     print(f"Failed to create HDFS Directory : hdfs:{directory}")
 
-    task_path = os.path.join(path, task)
+    task_path = os.path.join(path, submission_id)
 
     timestamp = str(time.time())
     job_name = team_id + "_" + assignment_id + "_" + timestamp
     
-    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}'''
+    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
     print(mapred_job)
     logger.mark(f"Spawning Hadoop Process")
 
@@ -170,7 +172,11 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
             msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully!"
             job_output = "Good Job!"
             status = current_job["state"]
-        
+            if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
+                os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]} {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+            process_code = process.wait()
+
         elif current_job["state"] == "FAILED":
             logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed")
             msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed."
@@ -185,7 +191,7 @@ def run_hadoop_job(team_id, assignment_id, task, timeout, mapper: str, reducer: 
         status = "KILLED"
         # restart_hadoop_environment()
 
-    res = cleanup(team_id, assignment_id, task)
+    res = cleanup(team_id, assignment_id, submission_id)
 
     logs = logger.get_logs(as_str=True)
 

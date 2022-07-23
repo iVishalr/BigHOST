@@ -3,7 +3,7 @@ import sys
 import json
 import requests
 import subprocess
-
+import pickle
 from redis import Redis
 from pprint import pprint
 from dotenv import load_dotenv
@@ -75,6 +75,7 @@ def sanity_check():
         doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
         return "error"
 
+    data = pickle.dumps(data)
     queue.enqueue(data)
     
     return "received"

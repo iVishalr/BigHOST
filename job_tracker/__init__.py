@@ -1,5 +1,5 @@
 from .job import Job
-
+from output_processor import queue as output_queue
 from queues.redisqueue import RedisQueue
 from redis import Redis, ConnectionPool
 
