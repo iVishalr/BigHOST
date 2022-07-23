@@ -11,7 +11,7 @@ print(r.status_code)
 url = "http://127.0.0.1:9000/sanity-check"
 
 data = {'teamId': 'BD_019_536_571_000', 
-        'assignmentId': 'A1', 
+        'assignmentId': 'A1T1', 
         'mapper': None, 
         'reducer': None, 
         'timeout':30, 
@@ -43,7 +43,7 @@ for i in range(4):
     sleep(0.1)
 
 data = {'teamId': 'BD_019_536_571_004', 
-        'assignmentId': 'A1', 
+        'assignmentId': 'A1T1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
@@ -75,7 +75,7 @@ for i in range(4):
     sleep(0.1)
 
 data = {'teamId': 'BD_019_536_571_008', 
-        'assignmentId': 'A1', 
+        'assignmentId': 'A1T1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
@@ -107,7 +107,7 @@ for i in range(10):
     sleep(0.1)
 
 data = {'teamId': 'BD_019_536_571_018', 
-        'assignmentId': 'A1', 
+        'assignmentId': 'A1T1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
@@ -139,7 +139,7 @@ for i in range(5):
     sleep(0.1)
 
 data = {'teamId': 'BD_019_536_571_023', 
-        'assignmentId': 'A1', 
+        'assignmentId': 'A1T1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 

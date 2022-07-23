@@ -254,7 +254,7 @@ def cleanup(team_id, assign_id, task) -> int:
 
     logger.mark("Deleting data in HDFS")
 
-    task_path = TASK_OUTPUT_PATH[task]
+    task_path = TASK_OUTPUT_PATH[assign_id]
 
     _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task_path}")
     _ = delete_hdfs_directories(f"/{team_id}/{assign_id}")
@@ -320,10 +320,10 @@ def initialize_environment(add_dataset=True) -> Tuple:
         os.mkdir(SUBMISSIONS)
 
         # following stuff is temporary. Only for testing purposes.
-        _ = create_hdfs_directory("/A1")
-        _ = create_hdfs_directory("/A1/input")
+        _ = create_hdfs_directory("/A1T1")
+        _ = create_hdfs_directory("/A1T1/input")
 
-        p = subprocess.Popen([f"{HDFS} dfs -put /Assign2/datasets/dataset_1percent.txt /A1/input"], shell=True, text=True)
+        p = subprocess.Popen([f"{HDFS} dfs -put /Assign2/datasets/dataset_1percent.txt /A1T1/input"], shell=True, text=True)
         _ = p.wait()
     
     return 0, error_logs 

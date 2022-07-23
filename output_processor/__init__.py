@@ -5,7 +5,7 @@ from redis import Redis, ConnectionPool
 from queues.redisqueue import RedisQueue
 
 load_dotenv(os.path.join(os.getcwd(), '.env'))
-client = MongoClient(os.getenv('MONGO_URI'))
+client = MongoClient(os.getenv('MONGO_URI'), connect=False)
 db = client['bd']
 submissions = db['submissions']
 

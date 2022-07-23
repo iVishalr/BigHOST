@@ -175,6 +175,7 @@ class ExecutorContext:
         num_submissions = -1
         request_url = f"http://{self.fetch_ip}:{self.fetch_port}/{self.fetch_route}"
         r = requests.get(request_url, params={"prefetch_factor": self.prefetch_factor})
+        print(r.text)
         if r.status_code != 200:
             print(f"Message : {json.loads(r.text)}")
             print(f"Status Code : {r.status_code}")
