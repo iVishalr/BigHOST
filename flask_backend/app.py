@@ -1,23 +1,22 @@
-from flask import Flask, request, jsonify
-import sys
 import os
-sys.path.append(os.path.join(os.getcwd(), '..'))
-from queues.redisqueue import RedisQueue
-from flask_cors import cross_origin
-import subprocess
-from signal import signal, SIGPIPE, SIG_DFL
-signal(SIGPIPE, SIG_DFL)
+import sys
 import json
 import requests
-from redis import Redis
-app = Flask(__name__)   
-from pymongo import MongoClient, ReturnDocument
-from dotenv import load_dotenv
-from pprint import pprint
-load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
+import subprocess
 
-broker = Redis('localhost')
-queue = RedisQueue(broker=broker, queue_name='sanity-queue')
+from redis import Redis
+from pprint import pprint
+from dotenv import load_dotenv
+from flask_cors import cross_origin
+from flask_backend import queue, broker
+from flask import Flask, request, jsonify
+from signal import signal, SIGPIPE, SIG_DFL
+from pymongo import MongoClient, ReturnDocument
+# sys.path.append(os.path.join(os.getcwd(), '..'))
+
+signal(SIGPIPE, SIG_DFL)
+app = Flask(__name__)   
+load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
 
 client = MongoClient(os.getenv('MONGO_URI'))
 db = client['bd']
@@ -85,7 +84,7 @@ def sanity_check():
 def get_jobs():
     data = json.loads(request.data)
     # Number of jobs
-    num = data['jobs']
+    num = data['prefetch_factor']
 
     if queue.is_empty():
         return None
@@ -96,7 +95,7 @@ def get_jobs():
             queue_name, job = queue.dequeue()
             if job is not None:
                 jobs.append(job)
-            #jobs.append(job)
+
     else:
         for i in range(num):
             queue_name, job = queue.dequeue()

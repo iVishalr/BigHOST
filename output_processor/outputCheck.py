@@ -1,24 +1,20 @@
-from flask import Flask, request, jsonify
-import sys
 import os
-sys.path.append(os.path.join(os.getcwd(), '..'))
-from queues.redisqueue import RedisQueue
-from flask_cors import cross_origin
-import subprocess
-from signal import signal, SIGPIPE, SIG_DFL
-signal(SIGPIPE, SIG_DFL)
+import sys
 import json
-import requests
-from redis import Redis
-app = Flask(__name__)   
-from pymongo import MongoClient
-from dotenv import load_dotenv
-from pprint import pprint
-load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
 import filecmp
+import requests
+import subprocess
 
-broker = Redis('localhost')
-queue = RedisQueue(broker=broker, queue_name='output-queue')
+from pprint import pprint
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from flask_cors import cross_origin
+from flask import Flask, request, jsonify
+from signal import signal, SIGPIPE, SIG_DFL
+
+signal(SIGPIPE, SIG_DFL)
+app = Flask(__name__)   
+load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
 
 client = MongoClient(os.getenv('MONGO_URI'))
 db = client['bd']
