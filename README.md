@@ -137,7 +137,7 @@ Note : You should be in project root directory
 ```bash
 docker stop hadoop-3.2.2-container
 docker rm hadoop-3.2.2-container
-docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 -v $PWD/output:/output --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
 ```
 
 #### Setting up Redis

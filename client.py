@@ -8,14 +8,14 @@ res = json.loads(r.text)
 print(res)
 print(r.status_code)
 
-url = "http://127.0.0.1:9000/submit-job"
+url = "http://127.0.0.1:9000/sanity-check"
 
-data = {'team_id': 'BD_019_536_571_000', 
-        'assignment_id': 'A1', 
+data = {'teamId': 'BD_019_536_571_000', 
+        'assignmentId': 'A1', 
         'mapper': None, 
         'reducer': None, 
         'timeout':30, 
-        "task": "task1"
+        "submissionId": "submissionId1"
     }
 
 with open("./test/m.py", "r") as f:
@@ -25,15 +25,15 @@ with open("./test/r.py", "r") as f:
     data['reducer'] = f.read()
 
 for i in range(4):
-    team_id = data["team_id"]
-    team_id = team_id.split("_")
-    last_srn = int(team_id[-1])
+    teamId = data["teamId"]
+    teamId = teamId.split("_")
+    last_srn = int(teamId[-1])
     last_srn += 1
     last_srn = str(last_srn)
     last_srn = "0" * (3-len(last_srn)) + last_srn
-    team_id[-1] = last_srn
-    data["team_id"] = "_".join(team_id)
-    print(f"Team ID : {data['team_id']}")
+    teamId[-1] = last_srn
+    data["teamId"] = "_".join(teamId)
+    print(f"Team ID : {data['teamId']}")
     payload = [data]
     payload = json.dumps(payload)
     r = requests.post(url, data=payload)
@@ -42,12 +42,12 @@ for i in range(4):
     print(res)
     sleep(0.1)
 
-data = {'team_id': 'BD_019_536_571_004', 
-        'assignment_id': 'A1', 
+data = {'teamId': 'BD_019_536_571_004', 
+        'assignmentId': 'A1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
-        "task": "task1"
+        "submissionId": "submissionId1"
     }
 
 with open("./test/m.py", "r") as f:
@@ -57,15 +57,15 @@ with open("./test/r_infinite_loop.py", "r") as f:
     data['reducer'] = f.read()
 
 for i in range(4):
-    team_id = data["team_id"]
-    team_id = team_id.split("_")
-    last_srn = int(team_id[-1])
+    teamId = data["teamId"]
+    teamId = teamId.split("_")
+    last_srn = int(teamId[-1])
     last_srn += 1
     last_srn = str(last_srn)
     last_srn = "0" * (3-len(last_srn)) + last_srn
-    team_id[-1] = last_srn
-    data["team_id"] = "_".join(team_id)
-    print(f"Team ID : {data['team_id']}")
+    teamId[-1] = last_srn
+    data["teamId"] = "_".join(teamId)
+    print(f"Team ID : {data['teamId']}")
     payload = [data]
     payload = json.dumps(payload)
     r = requests.post(url, data=payload)
@@ -74,12 +74,12 @@ for i in range(4):
     print(res)
     sleep(0.1)
 
-data = {'team_id': 'BD_019_536_571_008', 
-        'assignment_id': 'A1', 
+data = {'teamId': 'BD_019_536_571_008', 
+        'assignmentId': 'A1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
-        "task": "task1"
+        "submissionId": "submissionId1"
     }
 
 with open("./test/m_invalid.py", "r") as f:
@@ -89,15 +89,15 @@ with open("./test/r_invalid.py", "r") as f:
     data['reducer'] = f.read()
 
 for i in range(10):
-    team_id = data["team_id"]
-    team_id = team_id.split("_")
-    last_srn = int(team_id[-1])
+    teamId = data["teamId"]
+    teamId = teamId.split("_")
+    last_srn = int(teamId[-1])
     last_srn += 1
     last_srn = str(last_srn)
     last_srn = "0" * (3-len(last_srn)) + last_srn
-    team_id[-1] = last_srn
-    data["team_id"] = "_".join(team_id)
-    print(f"Team ID : {data['team_id']}")
+    teamId[-1] = last_srn
+    data["teamId"] = "_".join(teamId)
+    print(f"Team ID : {data['teamId']}")
     payload = [data]
     payload = json.dumps(payload)
     r = requests.post(url, data=payload)
@@ -106,12 +106,12 @@ for i in range(10):
     print(res)
     sleep(0.1)
 
-data = {'team_id': 'BD_019_536_571_018', 
-        'assignment_id': 'A1', 
+data = {'teamId': 'BD_019_536_571_018', 
+        'assignmentId': 'A1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
-        "task": "task1"
+        "submissionId": "submissionId1"
     }
 
 with open("./test/m.py", "r") as f:
@@ -121,15 +121,15 @@ with open("./test/r_syntax_error.py", "r") as f:
     data['reducer'] = f.read()
 
 for i in range(5):
-    team_id = data["team_id"]
-    team_id = team_id.split("_")
-    last_srn = int(team_id[-1])
+    teamId = data["teamId"]
+    teamId = teamId.split("_")
+    last_srn = int(teamId[-1])
     last_srn += 1
     last_srn = str(last_srn)
     last_srn = "0" * (3-len(last_srn)) + last_srn
-    team_id[-1] = last_srn
-    data["team_id"] = "_".join(team_id)
-    print(f"Team ID : {data['team_id']}")
+    teamId[-1] = last_srn
+    data["teamId"] = "_".join(teamId)
+    print(f"Team ID : {data['teamId']}")
     payload = [data]
     payload = json.dumps(payload)
     r = requests.post(url, data=payload)
@@ -138,12 +138,12 @@ for i in range(5):
     print(res)
     sleep(0.1)
 
-data = {'team_id': 'BD_019_536_571_023', 
-        'assignment_id': 'A1', 
+data = {'teamId': 'BD_019_536_571_023', 
+        'assignmentId': 'A1', 
         'mapper': None, 
         'reducer': None, 
         'timeout': 30, 
-        "task": "task1"
+        "submissionId": "submissionId1"
     }
 
 with open("./test/m_infinite_loop.py", "r") as f:
@@ -153,15 +153,15 @@ with open("./test/r_syntax_error.py", "r") as f:
     data['reducer'] = f.read()
 
 for i in range(2):
-    team_id = data["team_id"]
-    team_id = team_id.split("_")
-    last_srn = int(team_id[-1])
+    teamId = data["teamId"]
+    teamId = teamId.split("_")
+    last_srn = int(teamId[-1])
     last_srn += 1
     last_srn = str(last_srn)
     last_srn = "0" * (3-len(last_srn)) + last_srn
-    team_id[-1] = last_srn
-    data["team_id"] = "_".join(team_id)
-    print(f"Team ID : {data['team_id']}")
+    teamId[-1] = last_srn
+    data["teamId"] = "_".join(teamId)
+    print(f"Team ID : {data['teamId']}")
     payload = [data]
     payload = json.dumps(payload)
     r = requests.post(url, data=payload)

@@ -308,7 +308,7 @@ if __name__ == "__main__":
     executor = ExecutorContext(
         fetch_ip="localhost",
         fetch_port=9000,
-        fetch_route="get-submissions",
+        fetch_route="get-jobs",
         num_workers=1,
         global_queue_thread=True,
         global_prefetch_thread=True,
