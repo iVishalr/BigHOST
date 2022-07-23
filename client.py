@@ -3,10 +3,10 @@ import json
 import requests
 from time import sleep
 
-r = requests.get("http://127.0.0.1:9000/empty-queue")
-res = json.loads(r.text)
-print(res)
-print(r.status_code)
+# r = requests.get("http://127.0.0.1:9000/empty-queue")
+# res = json.loads(r.text)
+# print(res)
+# print(r.status_code)
 
 url = "http://127.0.0.1:9000/sanity-check"
 

@@ -1,5 +1,7 @@
 *logs.txt
-
+compile-test/
+output/
+answer/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

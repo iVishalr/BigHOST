@@ -1,21 +1,18 @@
 import os
 import sys
 import json
-from pkg_resources import require
 import requests
 import subprocess
 import pickle
-from redis import Redis
+
 from pprint import pprint
 from dotenv import load_dotenv
 from flask_cors import cross_origin
-from flask_backend import queue, broker
+from flask_backend import queue
 from flask import Flask, request, jsonify
 from signal import signal, SIGPIPE, SIG_DFL
-# from flask_backend import queue, broker, submissions
 from pymongo import MongoClient, ReturnDocument
-import pymongo
-# sys.path.append(os.path.join(os.getcwd(), '..'))
+
 
 signal(SIGPIPE, SIG_DFL) 
 
@@ -66,50 +63,41 @@ def createApp():
         '''
         jobs = json.loads(request.data)
         for submission in jobs:
-            # data = json.loads(request.data)
             data = submission
             update_submission(marks=-1, message='testing', data=data)
             mapper_data = data["mapper"]
             reducer_data = data['reducer']
             mapper_name = f"{data['teamId']}-{data['assignmentId']}-mapper.py"
             reducer_name = f"{data['teamId']}-{data['assignmentId']}-reducer.py"
-            mapper = open(f'compile-test/{mapper_name}', 'w')
-            mapper.write(mapper_data)
-            mapper.close()
-            mapper = open(f'compile-test/{mapper_name}', 'r')
-            mapper_content = mapper.readlines()
-            if mapper_content[0].strip() != '#!/usr/bin/env python3':
-                delete_files()
+
+            if not os.path.exists(os.path.join(os.getcwd(), "compile-test")):
+                os.makedirs(os.path.join(os.getcwd(), "compile-test"))
+
+            if mapper_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
                 update_submission(marks=-1, message='Mapper shebang not present', data=data)
                 res = {"msg": "Mapper shebang not present", "len": len(queue)}
                 return jsonify(res)
+
+            if reducer_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
+                update_submission(marks=-1, message='Reducer shebang not present', data=data)
+                res = {"msg": "Reducer shebang not present", "len": len(queue)}
+                return jsonify(res)
+
+            mapper = open(f'compile-test/{mapper_name}', 'w')
+            mapper.write(mapper_data)
             mapper.close()
 
             reducer = open(f'compile-test/{reducer_name}', 'w')
             reducer.write(reducer_data)
             reducer.close()
-            reducer = open(f'compile-test/{reducer_name}', 'r')
-            reducer_content = reducer.readlines()
-            if reducer_content[0].strip() != '#!/usr/bin/env python3':
-                delete_files()
-                update_submission(marks=-1, message='Reducer shebang not present', data=data)
-                res = {"msg": "Reducer shebang not present", "len": len(queue)}
-                return jsonify(res)
-            reducer.close()
 
-            # for sub in submissions.find({'teamId': data['teamId']}):
-            #     pprint(sub)
-
-            process = subprocess.Popen(['pylint', '--disable=I,R,C,W', 'compile-test/'], stdout=subprocess.PIPE, text=True)
+            process = subprocess.Popen([f'pylint --disable=I,R,C,W {os.path.join(os.getcwd(), "compile-test/")}'], shell=True, stdout=subprocess.PIPE, text=True)
             exit_code = process.wait()
-            #print(f'Exit Code: {exit_code}')
+
             output = process.communicate()[0]
-            #print(output.decode('utf-8'), file=sys.stderr)
             delete_files()
 
             if exit_code != 0:
-                doc = submissions.find_one({'teamId': data['teamId']})
-                #print(doc)
                 update_submission(marks=-1, message=output, data=data)
                 res = {"msg": "Error", "len": len(queue)}
                 return jsonify(res)

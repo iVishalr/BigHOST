@@ -1,3 +1,4 @@
+import shutil
 import requests
 import json
 import os
@@ -138,11 +139,6 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
     if res != 0:
         print(f"Failed to create HDFS Directory : hdfs:{directory}")
 
-    # directory = f"/{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[task]}"
-    # res = create_hdfs_directory(directory)
-    # if res != 0:
-    #     print(f"Failed to create HDFS Directory : hdfs:{directory}")
-
     task_path = os.path.join(path, submission_id)
 
     timestamp = str(time.time())
@@ -156,7 +152,6 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
         mapred_job
     ], shell=True, text=True, preexec_fn=os.setsid)
 
-    # process_exit_code = job_timer(mapred_process, timeout+10) # timeout is in seconds
     process_exit_code = mapred_process.wait()
     r = requests.get(JOBHISTORY_URL)
     data = json.loads(r.text)
@@ -172,9 +167,15 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Completed Successfully!"
             job_output = "Good Job!"
             status = current_job["state"]
+            
             if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
                 os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
-            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]} {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+
+            if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
+                os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
+                os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
+                
+            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
             process_code = process.wait()
 
         elif current_job["state"] == "FAILED":
@@ -189,7 +190,6 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
         msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Submission has taken more time than the alloted time. Submission has been killed!"
         job_output = "God knows what you are doing!"
         status = "KILLED"
-        # restart_hadoop_environment()
 
     res = cleanup(team_id, assignment_id, submission_id)
 

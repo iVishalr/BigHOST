@@ -60,6 +60,11 @@ def empty_queue():
     res = {"msg": "Queue Emptied"}
     return jsonify(res)
 
+@app.route("/output-queue-length", methods=["GET"])
+def queue_length():
+    res = {"length": len(output_queue), "queue_name": output_queue.queue_name}
+    return jsonify(res)
+
 @app.route("/empty-output-queue", methods=["GET"])
 def empty_output_queue():
     output_queue.empty_queue()

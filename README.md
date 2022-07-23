@@ -100,6 +100,41 @@ To store everything :)
 
 ## Build Steps
 
+```bash
+sudo apt update
+sudo apt upgrade
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt install python3 python3-pip
+sudo apt install gunicorn wget gdown magic-wormhole tmux
+```
+
+To install docker
+
+```bash
+sudo apt install apt-transport-https ca-certificates curl software-properties-common && \
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - && \
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable" && \
+sudo apt-get install docker-ce docker-ce-cli containerd.io -y && \
+cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF&&\
+sudo systemctl enable docker && sudo systemctl daemon-reload && sudo systemctl restart docker
+```
+
+Verify docker installation by
+
+```bash
+docker ps -a
+```
+
 To build image, type the following in terminal
 
 ```bash
@@ -111,7 +146,8 @@ cd ..
 To run the image, type the following in terminal
 
 ```bash
-docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+mkdir output
+docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 -v $PWD/output:/output --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
 ```
 
 To stop and remove the container, type the following in terminal
@@ -161,14 +197,17 @@ gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:10001 "job_tracker.queuer:
 In a new terminal type the following
 
 ```bash
-gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:9000 "test.backend:app"
+gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:9000 "flask_backend.app:createApp()"
 ```
 
 #### Queue some submissions
 
-To simulate queueing 120 submissions and retreiving one submission, in a new terminal type
+To simulate queueing submissions, in a new terminal type
 
 ```bash
+python3 ./client.py
+python3 ./client.py
+python3 ./client.py
 python3 ./client.py
 ```
 
@@ -179,9 +218,27 @@ Now the we have queued the submissions on website's backend, go to browser and m
 ```
 http://localhost:9000/queue-length
 http://localhost:10001/queue-length
+http://localhost:10001/output-queue-length
 ```
 
 <!-- Now we will have 119 submission on website's backend and 1 submission in evaluation engine's backend. -->
+
+#### Create directories
+
+Create the following directories in project root directory
+
+1. answer
+2. answer/A1T1
+
+Add the answer key to the above directory
+
+#### Start Output Processor
+
+In a new terminal type,
+
+```bash
+python3 -m output_processor.output
+```
 
 #### Start Executing submissions
 
@@ -202,6 +259,7 @@ To clear the queues, in browser make GET requests to
 ```
 http://localhost:9000/empty-queue
 http://localhost:10001/empty-queue
+http://localhost:10001/empty-output-queue
 ```
 
 ## Ports Used

@@ -10,7 +10,7 @@ from time import sleep
 from typing import List
 from datetime import datetime
 
-def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
+def output_processor_fn(rank: int, event: threading.Event, num_threads: int, submission_output_dir: str, answer_key_path: str):
     '''
     Takes a submissions output and compares to the expected output
     '''
@@ -36,8 +36,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
     from output_processor import queue, broker
     from output_processor import submissions
 
-    FILEPATH = os.path.join(os.getcwd(), 'output')
-    CORRECT_OUTPUT = os.path.join(os.getcwd(), 'correct_output')
+    FILEPATH = submission_output_dir
+    CORRECT_OUTPUT = answer_key_path
 
     def thread_fn(rank, event: threading.Event):
         interval = 0.05
@@ -80,25 +80,27 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
             status = data['status']
             submissionId = data['submission_id']
             message = data["job_output"]
+            teamBlacklisted = data["teamBlacklisted"]
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
             # If status is false, directly put 0
             if status == "FAILED":
                 doc = submissions.find_one({'teamId': teamId})
-                print(f'Doc: {doc}')
-                print(teamId, assignmentId, status, submissionId, message)
+                print(f"[{get_datetime()}] [output_processor]\tTeam: {teamId} Assignment ID: {assignmentId} Result: Failed Message: {message}")
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
-                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
+                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "teamBlacklisted": teamBlacklisted}})
             else:
                 # Has given outuput, need to check if it is corect
-                output = filecmp.cmp(os.path.join(FILEPATH_TEAM), os.path.join(CORRECT_OUTPUT, assignmentId))
+                output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
                 doc = submissions.find_one({'teamId': teamId})
                 if output:
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Passed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
                 else:
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
@@ -129,7 +131,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int):
         broker.close()
         sys.exit(0)
     
-    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)    
 
 if __name__ == "__main__":
-    output_processor_fn(1, threading.Event(), 1)
+    output_processor_fn(rank=1, event=threading.Event(), num_threads=1, submission_output_dir=os.path.join(os.getcwd(),"output"), answer_key_path=os.path.join(os.getcwd(), "answer"))
+    signal.pause()
