@@ -80,7 +80,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             status = data['status']
             submissionId = data['submission_id']
             message = data["job_output"]
-            teamBlacklisted = data["teamBlacklisted"]
+            teamBlacklisted = data["blacklisted"]
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
