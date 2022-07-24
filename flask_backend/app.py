@@ -33,26 +33,26 @@ def createApp():
     def update_submission(marks, message, data):
         
         doc = submissions.find_one({'teamId': data['teamId']})
-        if doc is None:
-            doc = {
-                'teamId': data['teamId'],
-                'teamBlacklisted': False,
-                'assignments': {
-                    data['assignmentId']: {
-                        'submissions': {
-                            data['submissionId']: {
-                                'marks': marks,
-                                'message': message
-                            }
-                        }
-                    }
-                }
-            }
-            submissions.insert_one(doc)
-        else:
-            doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
-            doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
-            doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+        # if doc is None:
+        #     doc = {
+        #         'teamId': data['teamId'],
+        #         'teamBlacklisted': False,
+        #         'assignments': {
+        #             data['assignmentId']: {
+        #                 'submissions': {
+        #                     data['submissionId']: {
+        #                         'marks': marks,
+        #                         'message': message
+        #                     }
+        #                 }
+        #             }
+        #         }
+        #     }
+        #     submissions.insert_one(doc)
+        # else:
+        doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
+        doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
+        doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
 
 
     @app.route('/sanity-check', methods=["POST"])
@@ -101,6 +101,8 @@ def createApp():
                 update_submission(marks=-1, message=output, data=data)
                 res = {"msg": "Error", "len": len(queue)}
                 return jsonify(res)
+            elif exit_code == 0:
+                update_submission(marks=1, message='Sanity Check Passed', data=data)
 
             data = pickle.dumps(data)
             queue.enqueue(data)

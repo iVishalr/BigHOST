@@ -4,10 +4,22 @@ from output_processor import queue as output_queue
 from job_tracker import queue
 from job_tracker.job import Job
 from flask import Flask, request, jsonify
+import os
+from pymongo import MongoClient
 
 app = Flask(__name__)
 
 PORT = 10001
+
+client = MongoClient(os.getenv('MONGO_URI'), connect=False)
+db = client['bd']
+submissions = db['submissions']
+
+def updateSubmission(marks, message, data):
+    doc = submissions.find_one({'teamId': data['teamId']})
+    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
+    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
+    doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
 
 @app.route("/submit-job", methods=["POST"])
 def submit_job():
@@ -38,6 +50,8 @@ def submit_job():
 
         serialized_job = pickle.dumps(data)
         queue.enqueue(serialized_job)
+
+        updateSubmission(marks=-1, message='In Queue', data=submission)
 
     res = {"msg": "Queued", "len": len(queue)}
     return jsonify(res)

@@ -90,7 +90,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 print(f"[{get_datetime()}] [output_processor]\tTeam: {teamId} Assignment ID: {assignmentId} Result: Failed Message: {message}")
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
-                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "teamBlacklisted": teamBlacklisted}})
+                doc['blacklisted']['status'] = teamBlacklisted
+                # doc['blacklisted']['message'] = message
+                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
             else:
                 # Has given outuput, need to check if it is corect
                 output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)

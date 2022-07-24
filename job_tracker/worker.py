@@ -5,11 +5,22 @@ import pickle
 import requests
 import threading
 import signal
-
+import os
+from pymongo import MongoClient
 from time import sleep
 from typing import List
 from datetime import datetime
 from job_tracker import output_queue
+
+client = MongoClient(os.getenv('MONGO_URI'), connect=False)
+db = client['bd']
+submissions = db['submissions']
+
+def updateSubmission(marks, message, data):
+    doc = submissions.find_one({'teamId': data['teamId']})
+    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
+    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
+    doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
 
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
@@ -74,6 +85,8 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             job = pickle.loads(serialized_job)
             start = time.time()
 
+            updateSubmission(marks=-1, message='Executing', data=job)
+
             key = job["team_id"]+"_"+job["assignment_id"]
             if key not in team_dict:
                 team_dict[key] = 0
@@ -84,7 +97,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             res['team_id'] = job['team_id']
             res['assignment_id'] = job['assignment_id']
             res['submission_id'] = job['submission_id']
-            res['teamBlacklisted'] = False
+            res['blacklisted'] = False
             
             if res['status'] != "FAILED":
                 team_dict[key] -= 1
@@ -93,7 +106,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 if team_dict[key] <= blacklist_threshold:
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
                 else:
-                    res['teamBlacklisted'] = True
+                    res['blacklisted'] = True
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {r.status_code}. Team : {job['team_id']} is blacklisted.")
             
             serialized_job_message = pickle.dumps(res)
