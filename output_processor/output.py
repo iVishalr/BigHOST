@@ -34,7 +34,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     sys.stdout = Tee(sys.stdout, f)
 
     from output_processor import queue, broker
-    from output_processor import submissions
+    from output_processor import submissions, es
 
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
@@ -93,6 +93,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 doc['blacklisted']['status'] = teamBlacklisted
                 # doc['blacklisted']['message'] = message
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
+                es.send_email(teamId, submissionId, message)
             else:
                 # Has given outuput, need to check if it is corect
                 output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
@@ -106,6 +107,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
+                es.send_email(teamId, submissionId, doc['assignments'][assignmentId]['submissions'][submissionId]['message'])
 
     #end of thread_fn
     threads : List[threading.Thread] = []

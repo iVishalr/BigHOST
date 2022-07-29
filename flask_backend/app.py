@@ -7,6 +7,7 @@ import pickle
 
 from pprint import pprint
 from dotenv import load_dotenv
+from .email import EmailingService
 from flask_cors import cross_origin
 from flask_backend import queue
 from flask import Flask, request, jsonify
@@ -23,6 +24,8 @@ def createApp():
     client = MongoClient(os.getenv('MONGO_URI'), connect=False)
     db = client['bd']
     submissions = db['submissions']
+
+    es = EmailingService()
 
     app = Flask(__name__)  
     def delete_files():
@@ -53,6 +56,7 @@ def createApp():
         doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
         doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
         doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+        es.send_email(data['teamId'], data['submissionId'], message)
 
 
     @app.route('/sanity-check', methods=["POST"])

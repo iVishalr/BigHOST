@@ -10,17 +10,20 @@ from pymongo import MongoClient
 from time import sleep
 from typing import List
 from datetime import datetime
+from .email import EmailingService
 from job_tracker import output_queue
 
 client = MongoClient(os.getenv('MONGO_URI'), connect=False)
 db = client['bd']
 submissions = db['submissions']
+es = EmailingService()
 
 def updateSubmission(marks, message, data):
     doc = submissions.find_one({'teamId': data['teamId']})
     doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
     doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
     doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+    es.send_email(data['teamId'], data['submissionId'], message)
 
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
