@@ -37,6 +37,10 @@ ADD hadoop_config/ssh_config /root/.ssh/config
 ADD hadoop_config/start-hadoop.sh start-hadoop.sh
 ADD hadoop_config/restart-hadoop.sh restart-hadoop.sh
 ADD hadoop_server.py hadoop_server.py
+
+RUN chown root:root /root/.ssh/config
+RUN chmod 644 /root/.ssh/config
+
 RUN chmod +x hadoop_server.py start-hadoop.sh restart-hadoop.sh
 RUN rm -rf ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh
 ADD hadoop_config/hadoop-env.sh ${HADOOP_HOME}/etc/hadoop/
