@@ -17,8 +17,8 @@ submissions = db['submissions']
 
 def updateSubmission(marks, message, data):
     doc = submissions.find_one({'teamId': data['teamId']})
-    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
-    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
+    doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
+    doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
     doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
 
 @app.route("/submit-job", methods=["POST"])
@@ -29,6 +29,7 @@ def submit_job():
     for i in range(len(submission_data)):
 
         submission = submission_data[i]
+        print(submission)
 
         TEAM_ID = submission["teamId"]
         ASSIGNMENT_ID = submission["assignmentId"]
@@ -75,7 +76,7 @@ def empty_queue():
     return jsonify(res)
 
 @app.route("/output-queue-length", methods=["GET"])
-def queue_length():
+def output_queue_length():
     res = {"length": len(output_queue), "queue_name": output_queue.queue_name}
     return jsonify(res)
 

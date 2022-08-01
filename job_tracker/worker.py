@@ -19,11 +19,12 @@ submissions = db['submissions']
 es = EmailingService()
 
 def updateSubmission(marks, message, data):
-    doc = submissions.find_one({'teamId': data['teamId']})
-    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['marks'] = marks
-    doc['assignments'][data['assignmentId']]['submissions'][data['submissionId']]['message'] = message
-    doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
-    es.send_email(data['teamId'], data['submissionId'], message)
+    print(data)
+    doc = submissions.find_one({'teamId': data['team_id']})
+    doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
+    doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
+    doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {'assignments': doc['assignments']}})
+    es.send_email(data['team_id'], str(data['submission_id']), message)
 
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 
