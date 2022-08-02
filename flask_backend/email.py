@@ -1,4 +1,5 @@
 import os
+import time
 import smtplib
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -23,6 +24,24 @@ class EmailingService:
         client = MongoClient(os.getenv('MONGO_URI'), connect=False)
         db = client['bd']
         self.dbuser = db['user']
+    
+
+    def get_connection(self) -> None:
+        '''
+        This function returns the SMTP server connection.
+
+        Parameters:
+        -----------
+        None
+
+        Returns:
+        --------
+        None
+        '''
+
+        self.server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        self.server.ehlo()
+        self.server.login(self.user, self.password)
 
 
     def get_email_list(self, teamId: int) -> list:
@@ -129,4 +148,20 @@ class EmailingService:
         msg.attach(html)
 
         # Send the email
-        self.server.sendmail(self.sent_from, emails, msg.as_string())
+        try:
+            self.server.sendmail(self.sent_from, emails, msg.as_string())
+        except Exception as e:
+            retry_count = 0
+            while retry_count < 3:
+                self.get_connection()
+                try:
+                    self.server.sendmail(self.sent_from, emails, msg.as_string())
+                    break
+                except Exception as e:
+                    retry_count += 1
+                    time.sleep(2)
+                    continue
+            if retry_count == 3:
+                print(f'Failed to send email to {emails}')
+                print(e)
+                return
