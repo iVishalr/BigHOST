@@ -1,29 +1,31 @@
+import os
 import sys
 import time
 import json
+import signal
 import pickle
 import requests
 import threading
-import signal
-import os
-from pymongo import MongoClient
+
 from time import sleep
 from typing import List
+from smtp import mail_queue
 from datetime import datetime
-from .email import EmailingService
-from job_tracker import output_queue
-
-client = MongoClient(os.getenv('MONGO_URI'), connect=False)
-db = client['bd']
-submissions = db['submissions']
-es = EmailingService()
+from job_tracker import output_queue, submissions
 
 def updateSubmission(marks, message, data):
     doc = submissions.find_one({'teamId': data['team_id']})
     doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
     doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
     doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {'assignments': doc['assignments']}})
-    es.send_email(data['team_id'], str(data['submission_id']), message)
+    
+    mail_data = {}
+    mail_data['teamId'] = data['team_id']
+    mail_data['submissionId'] = str(data['submission_id'])
+    mail_data['submissionStatus'] = message
+    mail_data = pickle.dumps(mail_data)
+    mail_queue.enqueue(mail_data)
+
 
 def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
 

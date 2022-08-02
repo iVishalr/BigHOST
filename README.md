@@ -184,6 +184,18 @@ docker rm redis-stack-server
 docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
 ```
 
+### Setup .env file
+
+Create a .env file and add the following in the file.
+
+```bash
+MONGO_URI=mongodb+srv://team:bdteam-2022@bd-db-2022.plzop.mongodb.net/?retryWrites=true&w=majority
+MAIL_USER=bigadata@pes.edu
+MAIL_PASSWD=bigdata_2022
+```
+
+Note this is only for RR Campus
+
 #### Job Queuer
 
 In a new terminal type the following
@@ -238,6 +250,14 @@ In a new terminal type,
 
 ```bash
 python3 -m output_processor.output
+```
+
+#### Start Mailer Service
+
+Time to execute these submissions. In a new terminal, type
+
+```bash
+python3 -m smtp.mailer
 ```
 
 #### Start Executing submissions

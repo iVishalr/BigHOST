@@ -2,19 +2,18 @@ import os
 import sys
 import json
 import time
+import pickle
 import requests
 import subprocess
-import pickle
 
 from pprint import pprint
+from smtp import mail_queue
 from dotenv import load_dotenv
-from .email import EmailingService
-from flask_cors import cross_origin
 from flask_backend import queue
+from pymongo import MongoClient
+from flask_cors import cross_origin
 from flask import Flask, request, jsonify
 from signal import signal, SIGPIPE, SIG_DFL
-from pymongo import MongoClient, ReturnDocument
-
 
 signal(SIGPIPE, SIG_DFL) 
 
@@ -25,8 +24,6 @@ def createApp():
     client = MongoClient(os.getenv('MONGO_URI'), connect=False)
     db = client['bd']
     submissions = db['submissions']
-
-    es = EmailingService()
 
     app = Flask(__name__)  
     def delete_files():
@@ -75,7 +72,12 @@ def createApp():
             doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
             doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
         
-        es.send_email(data['teamId'], str(data['submissionId']), message)
+        mail_data = {}
+        mail_data['teamId'] = data['teamId']
+        mail_data['submissionId'] = str(data['submissionId'])
+        mail_data['submissionStatus'] = message
+        mail_data = pickle.dumps(mail_data)
+        mail_queue.enqueue(mail_data)
 
 
     @app.route('/sanity-check', methods=["POST"])

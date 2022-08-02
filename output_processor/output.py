@@ -8,6 +8,7 @@ import threading
 import pickle
 from time import sleep
 from typing import List
+from smtp import mail_queue
 from datetime import datetime
 
 def output_processor_fn(rank: int, event: threading.Event, num_threads: int, submission_output_dir: str, answer_key_path: str):
@@ -34,7 +35,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     sys.stdout = Tee(sys.stdout, f)
 
     from output_processor import queue, broker
-    from output_processor import submissions, es
+    from output_processor import submissions
 
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
@@ -93,7 +94,13 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 doc['blacklisted']['status'] = teamBlacklisted
                 # doc['blacklisted']['message'] = message
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
-                es.send_email(teamId, submissionId, message)
+                
+                mail_data = {}
+                mail_data['teamId'] = teamId
+                mail_data['submissionId'] = str(submissionId)
+                mail_data['submissionStatus'] = message
+                mail_data = pickle.dumps(mail_data)
+                mail_queue.enqueue(mail_data)
             else:
                 # Has given outuput, need to check if it is corect
                 output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
@@ -103,13 +110,21 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Passed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
+                    message = 'PASSED. Submission has passed our test cases. Good Job!'
                 else:
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
-                
+                    message = 'FAILED. Submission did not passed our test cases. Try Again!'
+
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
-                es.send_email(teamId, submissionId, doc['assignments'][assignmentId]['submissions'][submissionId]['message'])
+                
+                mail_data = {}
+                mail_data['teamId'] = teamId
+                mail_data['submissionId'] = str(submissionId)
+                mail_data['submissionStatus'] = message
+                mail_data = pickle.dumps(mail_data)
+                mail_queue.enqueue(mail_data)
 
     #end of thread_fn
     threads : List[threading.Thread] = []

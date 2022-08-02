@@ -11,7 +11,7 @@ from time import sleep
 
 url = "http://127.0.0.1:9000/sanity-check"
 
-data = {'teamId': 'BD_ADMIN_09', 
+data = {'teamId': 'BD_ADMIN_08', 
 'assignmentId': 'A1T1', 
 'mapper': '#!/usr/bin/env python3\nimport sys\n\ndef mapper():\n    for line in sys.stdin:\n        data=line.strip().split()\n        print(f"{data[0]},{data[1]}")\n\nif __name__ == \'__main__\':\n    mapper()\n', 
 'reducer': '#!/usr/bin/env python3\nimport sys\n\ndef reducer():\n    path = sys.argv[1]\n    f = open(path,"w+")\n    current_key = None\n    s = \'\'\n    for line in sys.stdin:\n        key,val = line.strip().split(\',\')\n        if current_key == None:\n            current_key = key\n            s = f"{key} [{val}"\n            f.write(f"{key},1\\n")\n            continue\n        if key == current_key:\n            s += f",{val}"\n        else:\n            print(s+"]")\n            current_key = key\n            s = f"{key} [{val}"\n            f.write(f"{key},1\\n")\n    print(s+"]")\n    f.close()\n\nif __name__ == \'__main__\':\n    reducer()\n', 

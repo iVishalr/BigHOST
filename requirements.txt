@@ -4,5 +4,6 @@ pymongo
 redis
 pickle
 requests
-dotenv
+python-dotenv
 pprint
+pymongo[srv]
