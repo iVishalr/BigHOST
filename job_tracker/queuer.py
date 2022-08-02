@@ -29,7 +29,6 @@ def submit_job():
     for i in range(len(submission_data)):
 
         submission = submission_data[i]
-        print(submission)
 
         TEAM_ID = submission["teamId"]
         ASSIGNMENT_ID = submission["assignmentId"]

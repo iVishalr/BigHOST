@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import requests
 import subprocess
 import pickle
@@ -34,16 +35,19 @@ def createApp():
                 os.remove('compile-test/' + file)
         
     def update_submission(marks, message, data):
-        print(data)
         doc = submissions.find_one({'teamId': data['teamId']})
         # if doc is None:
         #     doc = {
         #         'teamId': data['teamId'],
-        #         'teamBlacklisted': False,
+        #         'blacklisted': {
+        #             'status': False,
+        #             'message': "",
+        #             'timestamp': str(time.time_ns)[:13],
+        #         },
         #         'assignments': {
         #             data['assignmentId']: {
         #                 'submissions': {
-        #                     data['submissionId']: {
+        #                     str(data['submissionId']): {
         #                         'marks': marks,
         #                         'message': message
         #                     }
@@ -53,9 +57,24 @@ def createApp():
         #     }
         #     submissions.insert_one(doc)
         # else:
-        doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
-        doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
-        doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+        if str(data['submissionId']) not in doc['assignments'][data['assignmentId']]['submissions']:
+            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])] = {
+                str(data["submissionId"]): {
+                    "data": {
+                        "mapper": data["mapper"],
+                        "reducer": data["reducer"]
+                    },
+                "timestamp": int(str(time.time_ns())[:10]),
+                "marks": marks,
+                "message": message
+                }
+            }
+            doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+        else:
+            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
+            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
+            doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+        
         es.send_email(data['teamId'], str(data['submissionId']), message)
 
 
@@ -68,7 +87,7 @@ def createApp():
         jobs = json.loads(request.data)
         # for submission in jobs:
         data = jobs
-        update_submission(marks=-1, message='testing', data=data)
+        update_submission(marks=-1, message='Sanity Checking', data=data)
         mapper_data = data["mapper"]
         reducer_data = data['reducer']
         mapper_name = f"{data['teamId']}-{data['assignmentId']}-mapper.py"
@@ -78,12 +97,12 @@ def createApp():
             os.makedirs(os.path.join(os.getcwd(), "compile-test"))
 
         if mapper_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
-            update_submission(marks=-1, message='Mapper shebang not present', data=data)
+            update_submission(marks=-1, message='Mapper Shebang Not Present', data=data)
             res = {"msg": "Mapper shebang not present", "len": len(queue)}
             return jsonify(res)
 
         if reducer_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
-            update_submission(marks=-1, message='Reducer shebang not present', data=data)
+            update_submission(marks=-1, message='Reducer Shebang Not Present', data=data)
             res = {"msg": "Reducer shebang not present", "len": len(queue)}
             return jsonify(res)
 
@@ -102,13 +121,15 @@ def createApp():
         delete_files()
 
         if exit_code != 0:
-            update_submission(marks=-1, message=output, data=data)
+            update_submission(marks=-1, message="Submission did not pass the sanity check. Kindly check your files for syntax errors or illegal module imports. Error Log :\n"+output, data=data)
             res = {"msg": "Error", "len": len(queue)}
             return jsonify(res)
         elif exit_code == 0:
-            update_submission(marks=1, message='Sanity Check Passed', data=data)
+            update_submission(marks=-1, message='Sanity Check Passed', data=data)
 
         data['timeout'] = 30
+        update_submission(marks=-1, message='Queued for Execution', data=data)
+
         data = pickle.dumps(data)
         queue.enqueue(data)
         

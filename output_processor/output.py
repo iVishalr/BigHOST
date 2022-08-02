@@ -78,7 +78,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             teamId = data['team_id']
             assignmentId = data['assignment_id']
             status = data['status']
-            submissionId = data['submission_id']
+            submissionId = str(data['submission_id'])
             message = data["job_output"]
             teamBlacklisted = data["blacklisted"]
 
@@ -98,6 +98,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 # Has given outuput, need to check if it is corect
                 output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
                 doc = submissions.find_one({'teamId': teamId})
+                
                 if output:
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Passed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
@@ -106,6 +107,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
+                
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
                 es.send_email(teamId, submissionId, doc['assignments'][assignmentId]['submissions'][submissionId]['message'])
 

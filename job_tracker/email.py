@@ -59,7 +59,7 @@ class EmailingService:
             The subject of the email to be sent.
         '''
 
-        return f'Update on submission ID {submissionId}'
+        return f'Update on Submission ID {submissionId}'
 
 
     def get_body(self, submissionId: int, submissionStatus: str) -> MIMEText:

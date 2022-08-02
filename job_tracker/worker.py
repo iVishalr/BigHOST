@@ -19,7 +19,6 @@ submissions = db['submissions']
 es = EmailingService()
 
 def updateSubmission(marks, message, data):
-    print(data)
     doc = submissions.find_one({'teamId': data['team_id']})
     doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
     doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
