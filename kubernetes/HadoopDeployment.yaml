@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hadoop-deployment
+  labels:
+    app: hadoop
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hadoop
+
+  template:
+    metadata:
+      labels:
+        app: hadoop
+    spec:
+      volumes:
+      - name: hadoop-pv-storage
+        persistentVolumeClaim:
+          claimName: hadoop-pv-claim
+      containers:
+      - name: hadoop
+        image: hadoop-3.2.2:0.1
+        ports:
+        - containerPort: 10000
+        - containerPort: 9870
+        - containerPort: 8088
+        - containerPort: 10001
+        - containerPort: 9000
+        - containerPort: 6379
+        - containerPort: 19888
+        volumeMounts:
+        - mountPath: "/output"
+          name: hadoop-pv-storage
