@@ -24,7 +24,6 @@ for i in range(100):
     print(f"{i+1} {r.status_code}")
     res = json.loads(r.text)
     print(res)
-    sleep(0.5)
 
 # with open("./test/m.py", "r") as f:
 #     data['mapper'] = f.read()

@@ -309,13 +309,13 @@ if __name__ == "__main__":
         fetch_ip="localhost",
         fetch_port=9000,
         fetch_route="get-jobs",
-        num_workers=1,
+        num_workers=2,
         global_queue_thread=True,
         global_prefetch_thread=True,
         prefetch_threads=4,
         prefetch_factor=4,
         threshold=5,
-        num_backends=1
+        num_backends=4
     )
 
     print(executor)

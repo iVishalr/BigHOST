@@ -52,23 +52,23 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
 
     from job_tracker import queue
 
-    # def find_free_port():
-        # with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-        #     s.bind(('', 0))
-        #     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #     return s.getsockname()[1]
+    def find_free_port():
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.bind(('', 0))
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            return s.getsockname()[1]
 
     def start_container(cpu_limit, memory_limit, rank):
-        rm_port = 8088+worker_rank+rank
-        dn_port = 9870+worker_rank+rank
-        hadoop_port = 10000+worker_rank+rank
-        jobhis_port = 19888+worker_rank+rank
+        rm_port = find_free_port()
+        dn_port = find_free_port()
+        hadoop_port = find_free_port()
+        jobhis_port = find_free_port()
 
-        docker_command = f"docker run -p {rm_port}:8088 -p {dn_port}:9870 -p {hadoop_port}:10000 -p {jobhis_port}:19888 -v $PWD/output:/output -m {memory_limit} --cpus={cpu_limit} --name hadoop-c{rank} -d hadoop-3.2.2:0.1"
+        docker_command = f"docker run -p {rm_port}:8088 -p {dn_port}:9870 -p {hadoop_port}:10000 -p {jobhis_port}:19888 -v $PWD/output:/output -m {memory_limit} --cpus={cpu_limit} --name hadoop-c{str(worker_rank)+str(rank)} -d hadoop-3.2.2:0.1"
         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container with command: {docker_command}")
 
         os.system(docker_command)
-        time.sleep(20)
+        time.sleep(30)
 
         request_url = f"http://{docker_ip}:{hadoop_port}/{docker_route}"
 
@@ -76,7 +76,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
 
     def thread_fn(rank, event: threading.Event):
         
-        request_url = start_container("2", "2000m", rank)
+        request_url = start_container("2", "3000m", rank)
         
         interval = 0.05
         timeout = 0.05
@@ -124,6 +124,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             
             team_dict[key] += 1
             status_code = 500
+            
             try:
                 r = requests.post(request_url, data=job, timeout=150)
                 status_code = r.status_code
@@ -134,6 +135,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 res['blacklisted'] = False
                 r.close()
             except:
+                print("in execept")
                 res = {}
                 res['team_id'] = job['team_id']
                 res['assignment_id'] = job['assignment_id']
@@ -141,9 +143,9 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 res['blacklisted'] = False
                 res['status'] = 'FAILED'
                 res['job_output'] = 'You destroyed our container :('
-                os.system(f"docker stop hadoop-c{rank} && docker rm hadoop-c{rank}")
+                os.system(f"docker stop hadoop-c{str(worker_rank)+str(rank)} && docker rm hadoop-c{str(worker_rank)+str(rank)}")
                 time.sleep(5)
-                request_url = start_container("2", "2000m", rank)
+                request_url = start_container("2", "3000m", rank)
 
             
             if res['status'] != "FAILED":
