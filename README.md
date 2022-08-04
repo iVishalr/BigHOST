@@ -181,13 +181,13 @@ To automatically lauch the project, type the following in different terminals
 #### To start up the website's backend
 
 ```bash
-tumxinator project backend -n backend -p ./scripts/backend.yaml
+tmuxinator start project backend -n backend -p ./scripts/backend.yaml
 ```
 
 #### To start up the evaluator
 
 ```bash
-tmuxinator project evaluator -n evaluator -p ./scripts/evaluator.yaml
+tmuxinator start project evaluator -n evaluator -p ./scripts/evaluator.yaml
 ```
 
 #### Attaching to Tmux Sessions
