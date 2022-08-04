@@ -97,6 +97,14 @@ class EmailingService:
         part = MIMEText(html, 'html')
         return part
 
+    @staticmethod
+    def is_connected(connection):
+        try:
+            status = connection.noop()[0]
+        except:  # smtplib.SMTPServerDisconnected
+            status = -1
+        return True if status == 250 else False
+
     # @staticmethod
     # def send_email(teamId: int, submissionId: int, submissionStatus: str) -> None:
     #     '''

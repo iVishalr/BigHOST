@@ -9,13 +9,13 @@ import threading
 from time import sleep
 from typing import List
 from datetime import datetime
-from smtp import mail_broker, mail_queue, mail_user, mail_server
+from smtp import mail_broker, mail_queue, mail_user, mail_passwd
 from smtp.email_service import EmailingService
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-def output_processor_fn():
+def mailer_fn():
     '''
     Takes a messages from mail-queue and send mails
     '''
@@ -46,6 +46,8 @@ def output_processor_fn():
     event = threading.Event()
 
     mailer = EmailingService()
+
+    from smtp import mail_server
 
     while not event.is_set():
 
@@ -84,6 +86,7 @@ def output_processor_fn():
         submissionStatus = str(mail_message["submissionStatus"])
 
         emails = mailer.get_email_list(teamId)
+        
         if emails is None:
             continue
 
@@ -95,6 +98,10 @@ def output_processor_fn():
         msg['From'] = sent_from
         msg['To'] = ', '.join(emails)
         msg.attach(html)
+        
+        if not mailer.is_connected(mail_server):
+            mail_server.close()
+            mail_server = mailer.get_connection(mail_user, mail_passwd)
 
         mail_server.sendmail(sent_from, emails, msg.as_string())
 
@@ -107,5 +114,5 @@ def output_processor_fn():
     signal.signal(signal.SIGINT, signal_handler)    
 
 if __name__ == "__main__":
-    output_processor_fn()
+    mailer_fn()
     signal.pause()

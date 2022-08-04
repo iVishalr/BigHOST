@@ -167,3 +167,4 @@ test.py
 hello.py
 
 docker/output
+scripts/my-*.yaml

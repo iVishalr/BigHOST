@@ -98,6 +98,12 @@ We need another queue because we have multiple pods running and each one of them
 
 To store everything :)
 
+## Current Architecture
+
+<p align="center" padding="100px">
+    <img src="./doc/detail-architecture.png" alt="detail-architecture"></img>
+</p>
+
 ## Build Steps
 
 ```bash
@@ -106,7 +112,7 @@ sudo apt upgrade
 sudo apt install software-properties-common
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt install python3 python3-pip
-sudo apt install gunicorn wget gdown magic-wormhole tmux
+sudo apt install gunicorn wget magic-wormhole tmux tmuxinator
 ```
 
 To install docker
@@ -167,6 +173,44 @@ To run a MR Job follow the steps given below (no longer relevant)
 ## Running a Evaluation Simulation
 
 Note : You should be in project root directory
+
+## Launching using Tmuxinator
+
+To automatically lauch the project, type the following in different terminals
+
+#### To start up the website's backend
+
+```bash
+tumxinator project backend -n backend -p ./scripts/backend.yaml
+```
+
+#### To start up the evaluator
+
+```bash
+tmuxinator project evaluator -n evaluator -p ./scripts/evaluator.yaml
+```
+
+#### Attaching to Tmux Sessions
+
+To attach into the tmux sessions, type the following in different terminals
+
+```bash
+tmux attach -t backend
+```
+
+```bash
+tmux attach -t evaluator
+```
+
+#### To Switch between terminals
+
+Press `ctrl+b` and press the terminal number thats displayed on the bottom of tmux terminal
+
+#### To detach from tmux session
+
+Press `ctrl+b` and press `d`
+
+## To start the project manually
 
 #### Setting up Hadoop
 

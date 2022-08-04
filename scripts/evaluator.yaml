@@ -1,0 +1,20 @@
+name: evaluator
+root: ./
+
+windows:
+  - docker:
+    attach: false
+      - docker stop hadoop-3.2.2-container
+      - docker rm hadoop-3.2.2-container
+      - docker run -p 8088:8088 -p 9870:9870 -p 10000:10000 -p 19888:19888 -v $PWD/output:/output --name hadoop-3.2.2-container -d hadoop-3.2.2:0.1
+      - docker stop redis-stack-server
+      - docker rm redis-stack-server
+      - docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
+  - queuer:
+      - gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:10001 "job_tracker.queuer:app"
+  - mailer:
+      - python3 -m smtp.mailer
+  - output:
+      - python3 -m output_processor.output
+  - executor:
+      - python3 -m job_tracker.executor
