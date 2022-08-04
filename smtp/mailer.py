@@ -52,14 +52,17 @@ def mailer_fn():
     while not event.is_set():
 
         if len(mail_queue)==0:
-            timeout += 0.05
+            timeout += 0.01
             interval += timeout
             
-            if interval > 30:
-                interval = 30
+            if interval > 5:
+                interval = 5
 
             process_slept = 1
             print(f"[{get_datetime()}] [mailer]\tSleeping Mailer for {interval:.04f} seconds.")
+            if mail_server is not None:
+                mail_server.close()
+                mail_server = None
             sleep(interval)
             continue
 
@@ -69,6 +72,8 @@ def mailer_fn():
             if process_slept:
                 print(f"[{get_datetime()}] [mailer]\tWaking up Mailer.")
                 process_slept = 0
+            
+            mail_server = mailer.get_connection(mail_user, mail_passwd)
 
         mail_message = mail_queue.dequeue()
         
@@ -99,10 +104,6 @@ def mailer_fn():
         msg['To'] = ', '.join(emails)
         msg.attach(html)
         
-        if not mailer.is_connected(mail_server):
-            mail_server.close()
-            mail_server = mailer.get_connection(mail_user, mail_passwd)
-
         mail_server.sendmail(sent_from, emails, msg.as_string())
 
     def signal_handler(sig, frame):
