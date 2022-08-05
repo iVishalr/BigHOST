@@ -48,4 +48,5 @@ ADD ./Assign2/ /Assign2/
 
 # add new ports here
 EXPOSE 8088 50070 50075 50030 50060 9870 10000 19888
+# RUN swapoff -a
 CMD ["python3", "-u", "hadoop_server.py"]

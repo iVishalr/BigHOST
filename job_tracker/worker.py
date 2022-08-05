@@ -71,6 +71,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             name=f"hadoop-c{worker_rank}{rank}",
             cpu_period=int(cpu_limit)*100000,
             mem_limit=str(memory_limit),
+            mem_swappiness=0,
             restart_policy={
                 "Name": "on-failure", "MaximumRetryCount": 5
             },
@@ -96,7 +97,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
 
     def thread_fn(rank, event: threading.Event):
         
-        request_url, docker_container = start_container("hadoop-3.2.2:0.1","2", "2000m", rank)
+        request_url, docker_container = start_container("hadoop-3.2.2:0.1","2", "3000m", rank)
         
         interval = 0.05
         timeout = 0.05
@@ -163,7 +164,11 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 res['blacklisted'] = False
                 res['status'] = 'FAILED'
                 res['job_output'] = 'You destroyed our container :('
-                docker_container.restart()
+
+                docker_container.stop()
+                docker_container.wait()
+                docker_container.remove()
+                request_url, docker_container = start_container("hadoop-3.2.2:0.1", "2", "3000m", rank)
                 sleep(30)
             
             if res['status'] != "FAILED":

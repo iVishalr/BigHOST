@@ -1,10 +1,10 @@
-# #!/bin/bash
+# # #!/bin/bash
 # echo "Starting Hadoop Scripts"
 # # start ssh server
 # # /etc/init.d/ssh start
 
 # # format namenode
-# $HADOOP_HOME/bin/hdfs namenode -format
+# echo 'Y' | $HADOOP_HOME/bin/hdfs namenode -format
 
 # # start hadoop
 # # $HADOOP_HOME/sbin/start-dfs.sh

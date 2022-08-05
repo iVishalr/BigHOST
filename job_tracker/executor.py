@@ -140,7 +140,7 @@ class ExecutorContext:
         num_args = len(args)
 
         for i in range(self.num_workers):
-            print(f"[{self.get_datetime()}] [master_p]\tSpawing Worker {i+1}")
+            print(f"[{self.get_datetime()}] [master_p]\tSpawning Worker {i+1}")
             if len(args) < num_args+1:
                 args = list(args)
                 args = tuple([i+1] + args)
@@ -156,7 +156,7 @@ class ExecutorContext:
         threads = []
         num_args = len(args)
         for i in range(self.num_prefetch_threads):
-            print(f"[{self.get_datetime()}] [master_p]\tSpawing Thread {i+1}")
+            print(f"[{self.get_datetime()}] [master_p]\tSpawning Thread {i+1}")
             if len(args) < num_args+1:
                 args = tuple([i+1]+list(args))
             else:
@@ -315,7 +315,7 @@ if __name__ == "__main__":
         prefetch_threads=4,
         prefetch_factor=4,
         threshold=5,
-        num_backends=4
+        num_backends=2
     )
 
     print(executor)
