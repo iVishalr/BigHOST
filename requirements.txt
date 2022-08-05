@@ -7,3 +7,4 @@ requests
 python-dotenv
 pprint
 pymongo[srv]
+docker-py

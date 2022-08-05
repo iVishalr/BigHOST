@@ -4,16 +4,16 @@ import time
 import json
 import signal
 import pickle
+import socket
 import requests
 import threading
-import socket
-import socket
-from contextlib import closing
+
 from time import sleep
-from typing import List
+from typing import List, Tuple
 from smtp import mail_queue
 from datetime import datetime
-from job_tracker import output_queue, submissions
+from contextlib import closing
+from job_tracker import output_queue, submissions, docker_client
 
 
 def updateSubmission(marks, message, data):
@@ -58,25 +58,45 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             return s.getsockname()[1]
 
-    def start_container(cpu_limit, memory_limit, rank):
+    def start_container(image, cpu_limit, memory_limit, rank):
         rm_port = find_free_port()
         dn_port = find_free_port()
         hadoop_port = find_free_port()
         jobhis_port = find_free_port()
 
-        docker_command = f"docker run -p {rm_port}:8088 -p {dn_port}:9870 -p {hadoop_port}:10000 -p {jobhis_port}:19888 -v $PWD/output:/output -m {memory_limit} --cpus={cpu_limit} --name hadoop-c{str(worker_rank)+str(rank)} -d hadoop-3.2.2:0.1"
-        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container with command: {docker_command}")
-
-        os.system(docker_command)
+        docker_container = docker_client.containers.run(
+            image=image, 
+            auto_remove=False,
+            detach=True,
+            name=f"hadoop-c{worker_rank}{rank}",
+            cpu_period=int(cpu_limit)*100000,
+            mem_limit=str(memory_limit),
+            restart_policy={
+                "Name": "on-failure", "MaximumRetryCount": 5
+            },
+            volumes={
+                f'{os.path.join(os.getcwd(),"output")}': {'bind': '/output', 'mode': 'rw'},
+            },
+            ports={
+                '8088/tcp': rm_port,
+                '9870/tcp': dn_port,
+                '10000/tcp': hadoop_port,
+                '19888/tcp': jobhis_port,
+            }
+        )
+        
+        # docker_command = f"docker run -p {rm_port}:8088 -p {dn_port}:9870 -p {hadoop_port}:10000 -p {jobhis_port}:19888 -v $PWD/output:/output -m {memory_limit} --cpus={cpu_limit} --name hadoop-c{str(worker_rank)+str(rank)} -d hadoop-3.2.2:0.1"
+        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container.")
+        print(docker_container.__dict__)
         time.sleep(30)
 
         request_url = f"http://{docker_ip}:{hadoop_port}/{docker_route}"
 
-        return request_url
+        return request_url, docker_container
 
     def thread_fn(rank, event: threading.Event):
         
-        request_url = start_container("2", "3000m", rank)
+        request_url, docker_container = start_container("hadoop-3.2.2:0.1","2", "2000m", rank)
         
         interval = 0.05
         timeout = 0.05
@@ -143,10 +163,8 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 res['blacklisted'] = False
                 res['status'] = 'FAILED'
                 res['job_output'] = 'You destroyed our container :('
-                os.system(f"docker stop hadoop-c{str(worker_rank)+str(rank)} && docker rm hadoop-c{str(worker_rank)+str(rank)}")
-                time.sleep(5)
-                request_url = start_container("2", "3000m", rank)
-
+                docker_container.restart()
+                sleep(30)
             
             if res['status'] != "FAILED":
                 team_dict[key] -= 1
@@ -160,6 +178,12 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             
             serialized_job_message = pickle.dumps(res)
             output_queue.enqueue(serialized_job_message)
+
+        if event.is_set():
+            docker_container.stop()
+            docker_container.wait()
+            docker_container.remove()
+
     
     threads : List[threading.Thread] = []
     thread_events : List[threading.Event] = []
