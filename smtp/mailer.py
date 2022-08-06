@@ -1,19 +1,13 @@
-import os
 import sys
-import json
 import pickle
 import signal
-import filecmp
-import requests
 import threading
-from time import sleep
-from typing import List
-from datetime import datetime
-from smtp import mail_broker, mail_queue, mail_user, mail_passwd
-from smtp.email_service import EmailingService
 
-from email.mime.text import MIMEText
+from time import sleep
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
+from smtp.email_service import EmailingService
+from smtp import mail_broker, mail_queue, mail_user, mail_passwd
 
 def mailer_fn():
     '''
@@ -109,10 +103,11 @@ def mailer_fn():
     def signal_handler(sig, frame):
         print(f'[{get_datetime()}] [output_processor]\tStopping.')
         event.set()
+        sleep(2)
         mail_broker.close()
         sys.exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)    
+
+    signal.signal(signal.SIGINT, signal_handler)  
 
 if __name__ == "__main__":
     mailer_fn()

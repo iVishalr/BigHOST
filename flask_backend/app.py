@@ -25,7 +25,11 @@ def createApp():
     db = client['bd']
     submissions = db['submissions']
 
+    evaluator_internal_ip = os.getenv('EVALUATOR_INTERNAL_IP')
+    evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
+
     app = Flask(__name__)  
+    
     def delete_files():
         for file in os.listdir('compile-test'):
             if file.endswith('.py'):
@@ -87,7 +91,6 @@ def createApp():
         Currently assuming the assignment to be a MR Job
         '''
         jobs = json.loads(request.data)
-        # for submission in jobs:
         data = jobs
         update_submission(marks=-1, message='Sanity Checking', data=data)
         mapper_data = data["mapper"]
@@ -141,37 +144,6 @@ def createApp():
     @app.route('/get-jobs', methods=['GET'])
     @cross_origin()
     def get_jobs():
-    #     #print(request.data)
-    #     # data = json.loads(request.data)
-    #     # Number of jobs
-    #     num = int(request.args.get("prefetch_factor"))
-    #     print(num)
-    #     if queue.is_empty():
-    #         return None
-
-    #     jobs = []
-    #     if len(queue) > 0:
-    #         if len(queue) <= num:
-    #             while not queue.is_empty():
-    #                 queue_data = queue.dequeue()
-    #                 if queue_data is not None:
-    #                     queue_name, job = queue_data
-    #                 if job is not None:
-    #                     jobs.append(pickle.loads(job))
-
-    #         else:
-    #             for i in range(num):
-    #                 queue_data = queue.dequeue()
-    #                 if queue_data is not None:
-    #                     queue_name, job = queue_data
-    #                 if job is not None:
-    #                     jobs.append(pickle.loads(job))
-            
-    #     r = requests.post('http://localhost:10001/submit-job', json=jobs)
-    #     res = {"msg": f"Dequeued {len(jobs)} submissions from queue.", "num_submissions": len(jobs), "len": len(queue)}
-    #     print(res)
-    # # res = {"msg": "dequeued from submission queue", "len": len(queue), "server_response": res}
-    #     return jsonify(res)
         prefetch_factor = int(request.args.get("prefetch_factor"))
 
         if prefetch_factor is None: prefetch_factor = 1
@@ -196,7 +168,7 @@ def createApp():
         length = len(data)
         data = json.dumps(data)
 
-        request_url = f"http://localhost:10001/submit-job"
+        request_url = f"http://{evaluator_internal_ip}:10001/submit-job"
 
         r = requests.post(request_url, data=data)
         res = r.text

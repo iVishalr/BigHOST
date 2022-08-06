@@ -3,9 +3,8 @@ root: ./
 
 windows:
   - docker:
-    attach: false
       - docker stop redis-stack-server
       - docker rm redis-stack-server
       - docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
   - flask_backend:
-      - gunicorn -w 2 --preload --timeout 90 --bind 127.0.0.1:9000 "flask_backend.app:createApp()"
+      - gunicorn -w 2 --preload --timeout 90 --bind 0.0.0.0:9000 "flask_backend.app:createApp()"

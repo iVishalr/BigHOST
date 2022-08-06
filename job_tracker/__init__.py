@@ -18,3 +18,6 @@ db = client['bd']
 submissions = db['submissions']
 
 docker_client = docker.from_env()
+
+BACKEND_INTERNAL_IP = os.getenv('BACKEND_INTERNAL_IP')
+BACKEND_EXTERNAL_IP = os.getenv('BACKEND_EXTERNAL_IP')

@@ -2,9 +2,8 @@ Flask
 Flask-Cors
 pymongo
 redis
-pickle
 requests
 python-dotenv
-pprint
 pymongo[srv]
 docker
+gdown

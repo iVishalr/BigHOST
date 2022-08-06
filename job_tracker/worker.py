@@ -15,22 +15,20 @@ from datetime import datetime
 from contextlib import closing
 from job_tracker import output_queue, submissions, docker_client
 
-
-def updateSubmission(marks, message, data):
-    doc = submissions.find_one({'teamId': data['team_id']})
-    doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
-    doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
-    doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {'assignments': doc['assignments']}})
-    
-    mail_data = {}
-    mail_data['teamId'] = data['team_id']
-    mail_data['submissionId'] = str(data['submission_id'])
-    mail_data['submissionStatus'] = message
-    mail_data = pickle.dumps(mail_data)
-    mail_queue.enqueue(mail_data)
-
-
-def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: int, docker_route: str, num_threads: int):
+def worker_fn(
+    worker_rank: int, 
+    team_dict: dict, 
+    docker_ip: str, 
+    docker_port: int, 
+    docker_route: str,
+    docker_image: str, 
+    num_threads: int, 
+    cpu_limit: int, 
+    mem_limit: str, 
+    mem_swappiness: int,
+    host_output_dir: str, 
+    container_output_dir: str
+    ):
 
     class Tee(object):
         def __init__(self, *files):
@@ -41,7 +39,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
         def flush(self):
             pass
 
-    f = open(f'./worker{worker_rank}_logs.txt', 'w+')
+    f = open(f'./worker{worker_rank}_logs.txt', 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
 
@@ -49,6 +47,19 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
         now = datetime.now()
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
+
+    def updateSubmission(marks, message, data):
+        doc = submissions.find_one({'teamId': data['team_id']})
+        doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
+        doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
+        doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {'assignments': doc['assignments']}})
+        
+        mail_data = {}
+        mail_data['teamId'] = data['team_id']
+        mail_data['submissionId'] = str(data['submission_id'])
+        mail_data['submissionStatus'] = message
+        mail_data = pickle.dumps(mail_data)
+        mail_queue.enqueue(mail_data)
 
     from job_tracker import queue
 
@@ -58,7 +69,7 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             return s.getsockname()[1]
 
-    def start_container(image, cpu_limit, memory_limit, rank):
+    def start_container(rank: int, image: str, cpu_limit: int, memory_limit: str, mem_swappiness: int, host_output_dir: str, docker_output_dir: str ):
         rm_port = find_free_port()
         dn_port = find_free_port()
         hadoop_port = find_free_port()
@@ -71,22 +82,21 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
             name=f"hadoop-c{worker_rank}{rank}",
             cpu_period=int(cpu_limit)*100000,
             mem_limit=str(memory_limit),
-            mem_swappiness=0,
+            mem_swappiness=mem_swappiness,
             restart_policy={
                 "Name": "on-failure", "MaximumRetryCount": 5
             },
             volumes={
-                f'{os.path.join(os.getcwd(),"output")}': {'bind': '/output', 'mode': 'rw'},
+                f'{host_output_dir}': {'bind': docker_output_dir, 'mode': 'rw'},
             },
             ports={
                 '8088/tcp': rm_port,
                 '9870/tcp': dn_port,
-                '10000/tcp': hadoop_port,
+                f'{docker_port}/tcp': hadoop_port,
                 '19888/tcp': jobhis_port,
             }
         )
         
-        # docker_command = f"docker run -p {rm_port}:8088 -p {dn_port}:9870 -p {hadoop_port}:10000 -p {jobhis_port}:19888 -v $PWD/output:/output -m {memory_limit} --cpus={cpu_limit} --name hadoop-c{str(worker_rank)+str(rank)} -d hadoop-3.2.2:0.1"
         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container.")
         print(docker_container.__dict__)
         time.sleep(30)
@@ -96,8 +106,22 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
         return request_url, docker_container
 
     def thread_fn(rank, event: threading.Event):
-        
-        request_url, docker_container = start_container("hadoop-3.2.2:0.1","2", "3000m", rank)
+        print(rank, 
+            "hadoop-3.2.2:0.1", 
+            cpu_limit, 
+            mem_limit, 
+            mem_swappiness, 
+            host_output_dir, 
+            container_output_dir)
+        request_url, docker_container = start_container(
+            rank, 
+            "hadoop-3.2.2:0.1", 
+            cpu_limit, 
+            mem_limit, 
+            mem_swappiness, 
+            host_output_dir, 
+            container_output_dir
+        )
         
         interval = 0.05
         timeout = 0.05
@@ -168,7 +192,15 @@ def worker_fn(worker_rank: int, team_dict: dict, docker_ip: str, docker_port: in
                 docker_container.stop()
                 docker_container.wait()
                 docker_container.remove()
-                request_url, docker_container = start_container("hadoop-3.2.2:0.1", "2", "3000m", rank)
+                request_url, docker_container = start_container(
+                    rank, 
+                    docker_image, 
+                    cpu_limit, 
+                    mem_limit, 
+                    mem_swappiness, 
+                    host_output_dir, 
+                    container_output_dir
+                )
                 sleep(30)
             
             if res['status'] != "FAILED":

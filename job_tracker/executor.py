@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import signal
@@ -7,11 +8,13 @@ import multiprocessing
 
 from time import sleep
 from typing import Dict, List
+
+from output_processor import output
 from .worker import worker_fn
 from datetime import datetime
 
-from job_tracker import queue as redis_queue
-from job_tracker import broker
+from job_tracker import broker, queue as redis_queue, BACKEND_INTERNAL_IP, BACKEND_EXTERNAL_IP
+
 
 class Tee(object):
     def __init__(self, *files):
@@ -53,7 +56,7 @@ class ExecutorContext:
         prefetch_threads: int = 2,
         prefetch_factor: int = 2,
         threshold: int = 16,
-        num_backends: int = 8
+        num_backends: int = 8,
         ) -> None:
 
         """
@@ -275,9 +278,7 @@ class ExecutorContext:
         for ix, workers in enumerate(self.workers):
             print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}")
             if workers.is_alive():
-                # workers.terminate()
                 workers.join()
-                # workers.close()
 
         print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
         self.global_queue_cleanup()
@@ -306,7 +307,7 @@ class ExecutorContext:
 if __name__ == "__main__":
     
     executor = ExecutorContext(
-        fetch_ip="localhost",
+        fetch_ip=BACKEND_INTERNAL_IP,
         fetch_port=9000,
         fetch_route="get-jobs",
         num_workers=2,
@@ -323,6 +324,13 @@ if __name__ == "__main__":
     docker_ip = "localhost"
     docker_port = 10000
     docker_route = "run_job"
+    docker_image = "hadoop-3.2.2:0.1"
 
-    executor.execute(worker_fn, args=(executor.team_dict, docker_ip, docker_port, docker_route, executor.num_threads))
+    backend_cpu_limit: int = 2
+    backend_mem_limit: str = "3000m"
+    backend_host_output_dir: str = f"{os.path.join(os.getcwd(),'output')}"
+    backend_docker_output_dir: str = f"/output"
+    backend_memswapiness: int = 0
+
+    executor.execute(worker_fn, args=(executor.team_dict, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
     signal.pause()

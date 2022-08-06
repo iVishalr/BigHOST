@@ -30,7 +30,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
 
-    f = open(f'./output_processor_logs.txt', 'w+')
+    f = open(f'./output_processor_logs.txt', 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
 
@@ -85,6 +85,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
+            if not os.path.exists(FILEPATH_TEAM):
+                status = "FAILED"
+
             # If status is false, directly put 0
             if status == "FAILED":
                 doc = submissions.find_one({'teamId': teamId})
@@ -101,9 +104,14 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 mail_data['submissionStatus'] = message
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
+
             else:
                 # Has given outuput, need to check if it is corect
-                output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
+                if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
+                    output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
+                else:
+                    output = None
+
                 doc = submissions.find_one({'teamId': teamId})
                 
                 if output:
