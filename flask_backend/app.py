@@ -27,6 +27,9 @@ def createApp():
 
     evaluator_internal_ip = os.getenv('EVALUATOR_INTERNAL_IP')
     evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
+    
+    os.environ['TZ'] = 'Asia/Kolkata'
+    time.tzset()
 
     app = Flask(__name__)  
     

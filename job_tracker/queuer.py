@@ -1,7 +1,7 @@
 import json
 import pickle
 from output_processor import queue as output_queue
-from job_tracker import queue
+from job_tracker import queue, submissions
 from job_tracker.job import Job
 from flask import Flask, request, jsonify
 import os
@@ -10,10 +10,6 @@ from pymongo import MongoClient
 app = Flask(__name__)
 
 PORT = 10001
-
-client = MongoClient(os.getenv('MONGO_URI'), connect=False)
-db = client['bd']
-submissions = db['submissions']
 
 def updateSubmission(marks, message, data):
     doc = submissions.find_one({'teamId': data['teamId']})

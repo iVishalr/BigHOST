@@ -1,5 +1,6 @@
 import os
 import docker
+import time
 from .job import Job
 from dotenv import load_dotenv 
 from pymongo import MongoClient
@@ -21,3 +22,6 @@ docker_client = docker.from_env()
 
 BACKEND_INTERNAL_IP = os.getenv('BACKEND_INTERNAL_IP')
 BACKEND_EXTERNAL_IP = os.getenv('BACKEND_EXTERNAL_IP')
+
+os.environ['TZ'] = 'Asia/Kolkata'
+time.tzset()

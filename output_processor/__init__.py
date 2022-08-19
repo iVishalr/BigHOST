@@ -1,8 +1,12 @@
 import os
+import time
 from dotenv import load_dotenv 
 from pymongo import MongoClient
 from redis import Redis, ConnectionPool
 from queues.redisqueue import RedisQueue
+
+os.environ['TZ'] = 'Asia/Kolkata'
+time.tzset()
 
 load_dotenv(os.path.join(os.getcwd(), '.env'))
 client = MongoClient(os.getenv('MONGO_URI'), connect=False)

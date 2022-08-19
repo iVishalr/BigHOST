@@ -1,11 +1,13 @@
 import os
+import time
 import smtplib
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from redis import Redis, ConnectionPool
 from queues.redisqueue import RedisQueue
 
-
+os.environ['TZ'] = 'Asia/Kolkata'
+time.tzset()
 
 load_dotenv()
 client = MongoClient(os.getenv('MONGO_URI'), connect=False)

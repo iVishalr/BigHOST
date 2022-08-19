@@ -44,14 +44,13 @@ Also you will need to request additional quotas in GCP. By default, you are limi
    2. Press 'y' to accept the incomming files.
 8. Now in you backend VM, go to backend-2022, and install the python dependecies using `pip3 install -r requirements.txt`.
 9. Now its time to start the backend server.
-10. We will lauch everything at once using tmuxinator.
-11. In the terminal type the command `tmuxinator start project backend -p ./scripts/backend.yaml` to lauch the project.
-12. Go to the tmux session by attaching to it (google if you don't know).
-13. Initially, the docker containers will not be available. So this process takes a while.
-14. Make sure that `redis` docker is running.
-15. Switch to the `flask_backend` window by pressing `ctrl+b` and `1`.
-16. Restart the flask server.
-17. Now our backend is ready for accepting submissions.
+10. Execute `docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest`
+11. We will lauch everything at once using tmuxinator.
+12. In the terminal type the command `tmuxinator start project backend -p ./scripts/backend.yaml` to lauch the project.
+13. Go to the tmux session by attaching to it (google if you don't know).
+14. Switch to the `flask_backend` window by pressing `ctrl+b` and `1`.
+15. Restart the flask server.
+16. Now our backend is ready for accepting submissions.
 
 ### Inside the Evaluator VM
 
@@ -66,15 +65,14 @@ Also you will need to request additional quotas in GCP. By default, you are limi
    2. Press 'y' to accept the incomming files.
 8. Now in you backend VM, go to backend-2022, and install the python dependecies using `pip3 install -r requirements.txt`.
 9. Now its time to start the evaluator server.
-10. We will lauch everything at once using tmuxinator.
-11. In the terminal type the command `tmuxinator start project evaluator -p ./scripts/evaluator.yaml` to lauch the project.
-12. Go to the tmux session by attaching to it (google if you don't know).
-13. Initially, the docker containers will not be available. So this process takes a while.
-14. Make sure that `redis` docker is running.
-15. Now switch to all other windows and restart all the processes. Dont forget this.
-16. Now our evaluator should be ready for processing.
-17. As a sanity check make sure that you see `Spawning 1 Thread` and `No more submissions ... | Current queue length is : 0`. If you don't see this, it means you have not setup the VMs properly. The two VMs are not able to connect to each other. Hint check your IPs. VM -> VM communication happens only through Internal IPs we reserved earlier.
-18. If you don't see any problems, go to the frontend website and submit submissions. The whole pipeline will automatically pick up the submission and execute the job.
+10. Execute `docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest`
+11. Build the hadoop container by executing the command `cd docker && docker build -t hadoop-3.2.2:0.1 -f hadoop3.dockerfile . && cd ..`
+12. We will lauch everything at once using tmuxinator.
+13. In the terminal type the command `tmuxinator start project evaluator -p ./scripts/evaluator.yaml` to lauch the project.
+14. Now our evaluator should be ready for processing.
+15. Go to the tmux session by attaching to it (google if you don't know).
+16. As a sanity check make sure that you see `Spawning 1 Thread` and `No more submissions ... | Current queue length is : 0`. If you don't see this, it means you have not setup the VMs properly. The two VMs are not able to connect to each other. Hint check your IPs. VM -> VM communication happens only through Internal IPs we reserved earlier.
+17. If you don't see any problems, go to the frontend website and submit submissions. The whole pipeline will automatically pick up the submission and execute the job.
 
 Next step. You can configure the evaluator according to your needs. All the configuration options are available at the bottom of the executor.py . You can provide how much ram / container to use. The number of backends you need. The number of workers to support the backend and so on. Note that this requires the knowledge of how executor and workers interact with each other. Please try to understand those files and only then proceed.
 

@@ -12,6 +12,9 @@ from datetime import datetime
 from typing import List, Tuple
 from flask import Flask, jsonify, request
 
+os.environ['TZ'] = 'Asia/Kolkata'
+time.tzset()
+
 app = Flask(__name__)
 
 HOST = "0.0.0.0"
