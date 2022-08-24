@@ -9,11 +9,11 @@ import requests
 import threading
 
 from time import sleep
-from typing import List, Tuple
 from smtp import mail_queue
 from datetime import datetime
 from contextlib import closing
-from job_tracker import output_queue, submissions, docker_client
+from typing import List, Tuple
+from job_tracker import output_queue, submissions_rr, submissions_ec, docker_client
 
 def worker_fn(
     worker_rank: int, 
@@ -49,6 +49,11 @@ def worker_fn(
         return timestamp
 
     def updateSubmission(marks, message, data):
+        if '1' == data['team_id'][2]:
+            # check if the team is from RR campus
+            submissions = submissions_rr
+        else:
+            submissions = submissions_ec
         doc = submissions.find_one({'teamId': data['team_id']})
         doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
         doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message

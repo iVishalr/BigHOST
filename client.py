@@ -9,15 +9,15 @@ from time import sleep
 # print(res)
 # print(r.status_code)
 
-url = "http://34.124.134.179:9000/sanity-check"
+url = "http://localhost:9000/sanity-check"
 
-data = {'teamId': 'BD_ADMIN_08', 
+data = {'teamId': 'BD1_ADMIN_09', 
 'assignmentId': 'A1T1', 
 'mapper': '#!/usr/bin/env python3\nimport sys\n\ndef mapper():\n    for line in sys.stdin:\n        data=line.strip().split()\n        print(f"{data[0]},{data[1]}")\n\nif __name__ == \'__main__\':\n    mapper()\n', 
 'reducer': '#!/usr/bin/env python3\nimport sys\n\ndef reducer():\n    path = sys.argv[1]\n    f = open(path,"w+")\n    current_key = None\n    s = \'\'\n    for line in sys.stdin:\n        key,val = line.strip().split(\',\')\n        if current_key == None:\n            current_key = key\n            s = f"{key} [{val}"\n            f.write(f"{key},1\\n")\n            continue\n        if key == current_key:\n            s += f",{val}"\n        else:\n            print(s+"]")\n            current_key = key\n            s = f"{key} [{val}"\n            f.write(f"{key},1\\n")\n    print(s+"]")\n    f.close()\n\nif __name__ == \'__main__\':\n    reducer()\n', 
 'submissionId': time.time()}
 
-for i in range(50):
+for i in range(5):
     data['submissionId'] = int(str(time.time_ns())[:13])
     payload = json.dumps(data)
     r = requests.post(url, data=payload)

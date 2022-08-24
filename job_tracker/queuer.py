@@ -1,17 +1,22 @@
+import os
 import json
 import pickle
-from output_processor import queue as output_queue
-from job_tracker import queue, submissions
+from pymongo import MongoClient
 from job_tracker.job import Job
 from flask import Flask, request, jsonify
-import os
-from pymongo import MongoClient
+from output_processor import queue as output_queue
+from job_tracker import queue, submissions_rr, submissions_ec
 
 app = Flask(__name__)
 
 PORT = 10001
 
 def updateSubmission(marks, message, data):
+    if '1' == data['teamId'][2]:
+        # check if the team is from RR campus
+        submissions = submissions_rr
+    else:
+        submissions = submissions_ec
     doc = submissions.find_one({'teamId': data['teamId']})
     doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
     doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message

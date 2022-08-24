@@ -35,7 +35,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     sys.stdout = Tee(sys.stdout, f)
 
     from output_processor import queue, broker
-    from output_processor import submissions
+    from output_processor import submissions_rr, submissions_ec
 
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
@@ -87,6 +87,12 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
 
             if not os.path.exists(FILEPATH_TEAM):
                 status = "FAILED"
+
+            if '1' == data['team_id'][2]:
+                # check if the team is from RR campus
+                submissions = submissions_rr
+            else:
+                submissions = submissions_ec
 
             # If status is false, directly put 0
             if status == "FAILED":

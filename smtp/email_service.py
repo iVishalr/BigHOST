@@ -1,7 +1,7 @@
 import os
 import time
 import smtplib
-from smtp import dbuser
+from smtp import dbuser_rr, dbuser_ec
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -41,7 +41,10 @@ class EmailingService:
         emails: list
             The list of emails of the team members of the team.
         '''
-
+        if str(teamId)[2] == '1':
+            dbuser = dbuser_rr
+        else:
+            dbuser = dbuser_ec
         team = dbuser.find_one({'teamID': str(teamId)})
         return team['emails']
 

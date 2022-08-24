@@ -21,9 +21,13 @@ def createApp():
 
     load_dotenv(os.path.join(os.getcwd(), '.env'))
 
-    client = MongoClient(os.getenv('MONGO_URI'), connect=False)
-    db = client['bd']
-    submissions = db['submissions']
+    client_rr = MongoClient(os.getenv('MONGO_URI_RR'), connect=False)
+    db_rr = client_rr['bd']
+    submissions_rr = db_rr['submissions']
+
+    client_ec = MongoClient(os.getenv('MONGO_URI_EC'), connect=False)
+    db_ec = client_ec['bd']
+    submissions_ec = db_ec['submissions']
 
     evaluator_internal_ip = os.getenv('EVALUATOR_INTERNAL_IP')
     evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
@@ -39,6 +43,12 @@ def createApp():
                 os.remove('compile-test/' + file)
         
     def update_submission(marks, message, data):
+        if '1' == data['teamId'][2]:
+            # check if the team is from RR campus
+            submissions = submissions_rr
+        else:
+            submissions = submissions_ec
+
         doc = submissions.find_one({'teamId': data['teamId']})
         # if doc is None:
         #     doc = {
