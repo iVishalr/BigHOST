@@ -7,7 +7,7 @@ from time import sleep
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from smtp.email_service import EmailingService
-from smtp import mail_broker, mail_queue, mail_user_rr, mail_user_ec, mail_passwd_rr, mail_passwd_ec
+from smtp import mail_broker, mail_queue, mail_user, mail_passwd
 
 def mailer_fn():
     '''
@@ -41,7 +41,7 @@ def mailer_fn():
 
     mailer = EmailingService()
 
-    from smtp import mail_server_rr, mail_server_ec
+    from smtp import mail_server
 
     while not event.is_set():
 
@@ -54,12 +54,9 @@ def mailer_fn():
 
             process_slept = 1
             print(f"[{get_datetime()}] [mailer]\tSleeping Mailer for {interval:.04f} seconds.")
-            if mail_server_rr is not None:
-                mail_server_rr.close()
-                mail_server_rr = None
-            if mail_server_ec is not None:
-                mail_server_ec.close()
-                mail_server_ec = None
+            if mail_server is not None:
+                mail_server.close()
+                mail_server = None
             sleep(interval)
             continue
 
@@ -70,8 +67,7 @@ def mailer_fn():
                 print(f"[{get_datetime()}] [mailer]\tWaking up Mailer.")
                 process_slept = 0
             
-            mail_server_rr = mailer.get_connection(mail_user_rr, mail_passwd_rr)
-            mail_server_ec = mailer.get_connection(mail_user_ec, mail_passwd_ec)
+            mail_server = mailer.get_connection(mail_user, mail_passwd)
 
         mail_message = mail_queue.dequeue()
         
@@ -92,13 +88,6 @@ def mailer_fn():
         
         if emails is None:
             continue
-        
-        if str(teamId)[2] == '1':
-            mail_user = mail_user_rr
-            mail_server = mail_server_rr
-        else:
-            mail_user = mail_user_ec
-            mail_server = mail_server_ec
 
         subject = mailer.get_subject(submissionId)
         html = mailer.get_body(submissionId, submissionStatus)
