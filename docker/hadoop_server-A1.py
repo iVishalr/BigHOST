@@ -146,8 +146,10 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
     timestamp = str(time.time())
     job_name = team_id + "_" + assignment_id + "_" + timestamp
-    
-    mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'v')}'" -input /{assignment_id}/input/dataset_1percent.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+    if assignment_id == "A1T1":
+        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A1/input/dataset.json -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+    elif assignment_id == "A1T2":
+        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "'/{os.path.join(task_path,'mapper.py')}' 70 -20 25" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A1/input/dataset.json -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
     print(mapred_job)
     logger.mark(f"Spawning Hadoop Process")
 
@@ -185,7 +187,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             logger.mark(f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed")
             msg = f"Team ID:{team_id} Assignment ID:{assignment_id} Hadoop Job Failed."
             status = current_job["state"]
-            job_output = "God knows what you are doing! Something is wrong in input files :("
+            job_output = "God knows what you are doing! Something is wrong in input files. Your submission might have thrown an error or has exceeded time limits."
             
     else:
         print(f"\n\nJob {job_name} was not recorded in Job History Server\n\n")
@@ -323,10 +325,10 @@ def initialize_environment(add_dataset=True) -> Tuple:
         os.mkdir(SUBMISSIONS)
 
         # following stuff is temporary. Only for testing purposes.
-        _ = create_hdfs_directory("/A1T1")
-        _ = create_hdfs_directory("/A1T1/input")
+        _ = create_hdfs_directory("/A1")
+        _ = create_hdfs_directory("/A1/input")
 
-        p = subprocess.Popen([f"{HDFS} dfs -put /Assign2/datasets/dataset_1percent.txt /A1T1/input"], shell=True, text=True)
+        p = subprocess.Popen([f"{HDFS} dfs -put /A1/dataset.json /A1/input"], shell=True, text=True)
         _ = p.wait()
     
     return 0, error_logs 

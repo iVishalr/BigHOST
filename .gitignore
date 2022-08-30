@@ -1,7 +1,8 @@
 *logs.txt
 compile-test/
 output/
-answer/
+answer/A1T1
+answer/A1T2
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -168,3 +169,4 @@ hello.py
 
 docker/output
 scripts/my-*.yaml
+TA/

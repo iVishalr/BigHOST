@@ -189,7 +189,7 @@ class ExecutorContext:
             else:
                 print(f"[{self.get_datetime()}] [prefet_{rank}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
         r.close()
-        if num_submissions == 0:
+        if num_submissions < self.threshold:
             self.thread_res.set()
         else:
             self.thread_res.clear()
@@ -310,13 +310,13 @@ if __name__ == "__main__":
         fetch_ip=BACKEND_INTERNAL_IP,
         fetch_port=9000,
         fetch_route="get-jobs",
-        num_workers=2,
+        num_workers=4,
         global_queue_thread=True,
         global_prefetch_thread=True,
         prefetch_threads=4,
         prefetch_factor=4,
-        threshold=5,
-        num_backends=2
+        threshold=30,
+        num_backends=8
     )
 
     print(executor)
@@ -326,8 +326,8 @@ if __name__ == "__main__":
     docker_route = "run_job"
     docker_image = "hadoop-3.2.2:0.1"
 
-    backend_cpu_limit: int = 2
-    backend_mem_limit: str = "3000m"
+    backend_cpu_limit: int = 3
+    backend_mem_limit: str = "8000m"
     backend_host_output_dir: str = f"{os.path.join(os.getcwd(),'output')}"
     backend_docker_output_dir: str = f"/output"
     backend_memswapiness: int = 0

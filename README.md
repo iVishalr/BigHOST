@@ -138,9 +138,12 @@ pip3 install -r requirements.txt
 Create a .env file and add the following in the file.
 
 ```bash
-MONGO_URI=mongodb+srv://team:bdteam-2022@bd-db-2022.plzop.mongodb.net/?retryWrites=true&w=majority
+MONGO_URI_RR=mongodb+srv://team:bdteam-2022@bd-db-2022.plzop.mongodb.net/?retryWrites=true&w=majority
+MONGO_URI_EC=mongodb+srv://bdadmin:admin123@bigdata-eccampus.8prlrhb.mongodb.net/bd?retryWrites=true&w=majority
+
 MAIL_USER=bigadata@pes.edu
 MAIL_PASSWD=bigdata_2022
+
 BACKEND_INTERNAL_IP=<ip_address>
 BACKEND_EXTERNAL_IP=<ip_address>
 EVALUATOR_INTERNAL_IP=<ip_address>

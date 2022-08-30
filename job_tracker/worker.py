@@ -7,6 +7,7 @@ import pickle
 import socket
 import requests
 import threading
+import subprocess
 
 from time import sleep
 from smtp import mail_queue
@@ -104,11 +105,11 @@ def worker_fn(
         
         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container.")
         print(docker_container.__dict__)
-        time.sleep(30)
+        time.sleep(60)
 
         request_url = f"http://{docker_ip}:{hadoop_port}/{docker_route}"
 
-        return request_url, docker_container
+        return request_url, docker_container, [rm_port, dn_port, hadoop_port, jobhis_port]
 
     def thread_fn(rank, event: threading.Event):
         print(rank, 
@@ -118,7 +119,8 @@ def worker_fn(
             mem_swappiness, 
             host_output_dir, 
             container_output_dir)
-        request_url, docker_container = start_container(
+
+        request_url, docker_container, port_list = start_container(
             rank, 
             "hadoop-3.2.2:0.1", 
             cpu_limit, 
@@ -131,7 +133,7 @@ def worker_fn(
         interval = 0.05
         timeout = 0.05
         process_slept = 0
-        blacklist_threshold = 3
+        blacklist_threshold = 10
 
         while not event.is_set():
 
@@ -192,12 +194,21 @@ def worker_fn(
                 res['submission_id'] = job['submission_id']
                 res['blacklisted'] = False
                 res['status'] = 'FAILED'
-                res['job_output'] = 'You destroyed our container :('
+                res['job_output'] = 'You destroyed my container. Please check your files properly. This incident has been reported. You will be blacklisted if repeated.'
 
-                docker_container.stop()
-                docker_container.wait()
-                docker_container.remove()
-                request_url, docker_container = start_container(
+                # for port in port_list:
+                #     port_kill_process = subprocess.Popen([f"sudo fuser -k {port}/tcp"], shell=True, text=True)
+                #     _ = port_kill_process.wait()
+
+                # docker_container.stop()
+                # docker_container.wait()
+                # docker_container.remove()
+                docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)
+                _ = docker_kill_process.wait()
+
+                docker_container = None
+
+                request_url, docker_container, port_list = start_container(
                     rank, 
                     docker_image, 
                     cpu_limit, 
@@ -206,7 +217,7 @@ def worker_fn(
                     host_output_dir, 
                     container_output_dir
                 )
-                sleep(30)
+                sleep(60)
             
             if res['status'] != "FAILED":
                 team_dict[key] -= 1
@@ -222,9 +233,12 @@ def worker_fn(
             output_queue.enqueue(serialized_job_message)
 
         if event.is_set():
-            docker_container.stop()
-            docker_container.wait()
-            docker_container.remove()
+            # docker_container.stop()
+            # docker_container.wait()
+            # docker_container.remove()
+
+            docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)
+            _ = docker_kill_process.wait()
 
     
     threads : List[threading.Thread] = []

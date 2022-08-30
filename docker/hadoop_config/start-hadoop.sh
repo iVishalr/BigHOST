@@ -3,6 +3,7 @@ echo "Starting Hadoop Scripts"
 # start ssh server
 /etc/init.d/ssh start
 
+$HADOOP_HOME/sbin/stop-all.sh
 # format namenode
 echo 'Y' | $HADOOP_HOME/bin/hdfs namenode -format
 

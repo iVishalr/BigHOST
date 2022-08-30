@@ -105,7 +105,7 @@ def createApp():
         '''
         jobs = json.loads(request.data)
         data = jobs
-        update_submission(marks=-1, message='Sanity Checking', data=data)
+        # update_submission(marks=-1, message='Sanity Checking', data=data)
         mapper_data = data["mapper"]
         reducer_data = data['reducer']
         mapper_name = f"{data['teamId']}-{data['assignmentId']}-mapper.py"
@@ -143,10 +143,11 @@ def createApp():
             res = {"msg": "Error", "len": len(queue)}
             return jsonify(res)
         elif exit_code == 0:
-            update_submission(marks=-1, message='Sanity Check Passed', data=data)
+            # update_submission(marks=-1, message='Sanity Check Passed', data=data)
+            pass
 
         data['timeout'] = 30
-        update_submission(marks=-1, message='Queued for Execution', data=data)
+        # update_submission(marks=-1, message='Queued for Execution', data=data)
 
         data = pickle.dumps(data)
         queue.enqueue(data)
