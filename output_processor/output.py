@@ -9,7 +9,7 @@ import pickle
 from time import sleep
 from typing import List
 from smtp import mail_queue
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def output_processor_fn(rank: int, event: threading.Event, num_threads: int, submission_output_dir: str, answer_key_path: str):
     '''
@@ -25,8 +25,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
         def flush(self):
             pass
 
-    def get_datetime() -> str:  
-        now = datetime.now()
+    def get_datetime(add_hours=0) -> str:  
+        now = datetime.now() + timedelta(hours=add_hours)
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
 
@@ -97,11 +97,13 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             # If status is false, directly put 0
             if status == "FAILED":
                 doc = submissions.find_one({'teamId': teamId})
-                print(f"[{get_datetime()}] [output_processor]\tTeam: {teamId} Assignment ID: {assignmentId} Result: Failed Message: {message}")
+                print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed Message: {message}")
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
                 doc['blacklisted']['status'] = teamBlacklisted
-                # doc['blacklisted']['message'] = message
+                
+                if teamBlacklisted:
+                    doc['blacklisted']['message'] = f"You are blocked from submitting. Come back at {get_datetime(add_hours=5)} to submit again."
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
                 
                 mail_data = {}
@@ -121,12 +123,12 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 doc = submissions.find_one({'teamId': teamId})
                 
                 if output:
-                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Passed")
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Passed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
                     message = 'PASSED. Submission has passed our test cases. Good Job!'
                 else:
-                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID: {assignmentId} Result : Failed")
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'

@@ -49,7 +49,7 @@ def worker_fn(
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
 
-    def updateSubmission(marks, message, data):
+    def updateSubmission(marks, message, data, send_mail=False):
         if '1' == data['team_id'][2]:
             # check if the team is from RR campus
             submissions = submissions_rr
@@ -60,12 +60,13 @@ def worker_fn(
         doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
         doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {'assignments': doc['assignments']}})
         
-        mail_data = {}
-        mail_data['teamId'] = data['team_id']
-        mail_data['submissionId'] = str(data['submission_id'])
-        mail_data['submissionStatus'] = message
-        mail_data = pickle.dumps(mail_data)
-        mail_queue.enqueue(mail_data)
+        if send_mail:
+            mail_data = {}
+            mail_data['teamId'] = data['team_id']
+            mail_data['submissionId'] = str(data['submission_id'])
+            mail_data['submissionStatus'] = message
+            mail_data = pickle.dumps(mail_data)
+            mail_queue.enqueue(mail_data)
 
     from job_tracker import queue
 
@@ -187,15 +188,14 @@ def worker_fn(
                 res['blacklisted'] = False
                 r.close()
             except:
-                print("in execept")
+                # print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Failed | Container hadoop-c{worker_rank}{rank} Crashed.")
                 res = {}
                 res['team_id'] = job['team_id']
                 res['assignment_id'] = job['assignment_id']
                 res['submission_id'] = job['submission_id']
                 res['blacklisted'] = False
                 res['status'] = 'FAILED'
-                res['job_output'] = 'You destroyed my container. Please check your files properly. This incident has been reported. You will be blacklisted if repeated.'
-
+                res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
                 # for port in port_list:
                 #     port_kill_process = subprocess.Popen([f"sudo fuser -k {port}/tcp"], shell=True, text=True)
                 #     _ = port_kill_process.wait()
@@ -223,11 +223,15 @@ def worker_fn(
                 team_dict[key] -= 1
                 print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
             else:
-                if team_dict[key] <= blacklist_threshold:
-                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
+
+                if "Container Crashed" in res['job_output']:
+                    if team_dict[key] <= blacklist_threshold:
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
+                    else:
+                        res['blacklisted'] = True
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
                 else:
-                    res['blacklisted'] = True
-                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
+                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
             
             serialized_job_message = pickle.dumps(res)
             output_queue.enqueue(serialized_job_message)

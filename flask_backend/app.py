@@ -8,6 +8,7 @@ import subprocess
 
 from pprint import pprint
 from smtp import mail_queue
+from datetime import datetime
 from dotenv import load_dotenv
 from flask_backend import queue
 from pymongo import MongoClient
@@ -36,13 +37,31 @@ def createApp():
     time.tzset()
 
     app = Flask(__name__)  
+
+    class Tee(object):
+        def __init__(self, *files):
+            self.files = files
+        def write(self, obj):
+            for f in self.files:
+                f.write(obj)
+        def flush(self):
+            pass
+
+    f = open(f'./sanity_checker_logs.txt', 'a+')
+    backup = sys.stdout
+    sys.stdout = Tee(sys.stdout, f)
+
+    def get_datetime() -> str:
+        now = datetime.now()
+        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
+        return timestamp
     
     def delete_files():
         for file in os.listdir('compile-test'):
             if file.endswith('.py'):
                 os.remove('compile-test/' + file)
         
-    def update_submission(marks, message, data):
+    def update_submission(marks, message, data, send_mail=False):
         if '1' == data['teamId'][2]:
             # check if the team is from RR campus
             submissions = submissions_rr
@@ -89,12 +108,13 @@ def createApp():
             doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
             doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
         
-        mail_data = {}
-        mail_data['teamId'] = data['teamId']
-        mail_data['submissionId'] = str(data['submissionId'])
-        mail_data['submissionStatus'] = message
-        mail_data = pickle.dumps(mail_data)
-        mail_queue.enqueue(mail_data)
+        if send_mail:
+            mail_data = {}
+            mail_data['teamId'] = data['teamId']
+            mail_data['submissionId'] = str(data['submissionId'])
+            mail_data['submissionStatus'] = message
+            mail_data = pickle.dumps(mail_data)
+            mail_queue.enqueue(mail_data)
 
 
     @app.route('/sanity-check', methods=["POST"])
@@ -105,7 +125,9 @@ def createApp():
         '''
         jobs = json.loads(request.data)
         data = jobs
-        # update_submission(marks=-1, message='Sanity Checking', data=data)
+        
+        update_submission(marks=-1, message='Sanity Checking', data=data)
+        
         mapper_data = data["mapper"]
         reducer_data = data['reducer']
         mapper_name = f"{data['teamId']}-{data['assignmentId']}-mapper.py"
@@ -115,12 +137,14 @@ def createApp():
             os.makedirs(os.path.join(os.getcwd(), "compile-test"))
 
         if mapper_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
-            update_submission(marks=-1, message='Mapper Shebang Not Present', data=data)
+            print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Mapper Shebang Not Present. Check if your file is in LF format.")
+            update_submission(marks=-1, message='Mapper Shebang Not Present. Check if your file is in LF format.', data=data, send_mail=True)
             res = {"msg": "Mapper shebang not present", "len": len(queue)}
             return jsonify(res)
 
         if reducer_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
-            update_submission(marks=-1, message='Reducer Shebang Not Present', data=data)
+            print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Reducer Shebang Not Present. Check if your file is in LF format.")
+            update_submission(marks=-1, message='Reducer Shebang Not Present. Check if your file is in LF format.', data=data, send_mail=True)
             res = {"msg": "Reducer shebang not present", "len": len(queue)}
             return jsonify(res)
 
@@ -139,15 +163,16 @@ def createApp():
         delete_files()
 
         if exit_code != 0:
-            update_submission(marks=-1, message="Submission did not pass the sanity check. Kindly check your files for syntax errors or illegal module imports. Error Log :\n"+output, data=data)
+            print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Failed Sanity Check. Check your files for syntax errors or illegal module imports. Error Log : {output}")
+            update_submission(marks=-1, message="Failed Sanity Check. Check your files for syntax errors or illegal module imports. Error Log : "+output, data=data, send_mail=True)
             res = {"msg": "Error", "len": len(queue)}
             return jsonify(res)
         elif exit_code == 0:
-            # update_submission(marks=-1, message='Sanity Check Passed', data=data)
-            pass
+            print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Passed Sanity Check.")
+            update_submission(marks=-1, message='Sanity Check Passed', data=data)
 
         data['timeout'] = 30
-        # update_submission(marks=-1, message='Queued for Execution', data=data)
+        update_submission(marks=-1, message='Queued for Execution', data=data)
 
         data = pickle.dumps(data)
         queue.enqueue(data)
