@@ -11,14 +11,15 @@ import subprocess
 
 from time import sleep
 from smtp import mail_queue
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import closing
-from typing import List, Tuple
+from typing import Dict, List, Tuple
+from queue import PriorityQueue
 from job_tracker import output_queue, submissions_rr, submissions_ec, docker_client
 
 def worker_fn(
     worker_rank: int, 
-    team_dict: dict, 
+    team_dict: dict,
     docker_ip: str, 
     docker_port: int, 
     docker_route: str,
@@ -30,6 +31,9 @@ def worker_fn(
     host_output_dir: str, 
     container_output_dir: str
     ):
+
+    blacklist_threshold = 5
+    blacklist_duration = 15 # in minutes
 
     class Tee(object):
         def __init__(self, *files):
@@ -65,6 +69,7 @@ def worker_fn(
             mail_data['teamId'] = data['team_id']
             mail_data['submissionId'] = str(data['submission_id'])
             mail_data['submissionStatus'] = message
+            mail_data['attachment'] = ""
             mail_data = pickle.dumps(mail_data)
             mail_queue.enqueue(mail_data)
 
@@ -112,6 +117,43 @@ def worker_fn(
 
         return request_url, docker_container, [rm_port, dn_port, hadoop_port, jobhis_port]
 
+
+    def blacklist_thread_fn(blacklist_queue: PriorityQueue[Dict] , event: threading.Event):
+        interval = 0.05
+        sleep(60)
+        print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tStarting.")
+        while not event.is_set():
+            try:
+                data = blacklist_queue.get_nowait()
+            except:
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tSleeping for 120s.")
+                sleep(120)
+                continue
+
+            if datetime.now() < data["end_time"]:
+                blacklist_queue.put(data)
+                interval = (data["end_time"] - datetime.now()).seconds
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tSleeping for {interval+5}s.")
+                sleep(interval+5)
+                continue
+
+            if '1' == data['team_id'][2]:
+                # check if the team is from RR campus
+                submissions = submissions_rr
+            else:
+                submissions = submissions_ec
+
+            doc = submissions.find_one({'teamId': data['team_id']})
+            doc['blacklisted']['status'] = False
+            doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {"blacklisted":  doc['blacklisted']}})
+            print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tUnblacklisted Team : {data['team_id']}.")
+            
+            if data['team_id']+"_"+data['assignment_id'][:-2]+"T1" in team_dict:
+                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T1"] = 0
+            if data['team_id']+"_"+data['assignment_id'][:-2]+"T2" in team_dict:
+                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T2"] = 0
+        return
+
     def thread_fn(rank, event: threading.Event):
         print(rank, 
             "hadoop-3.2.2:0.1", 
@@ -134,7 +176,6 @@ def worker_fn(
         interval = 0.05
         timeout = 0.05
         process_slept = 0
-        blacklist_threshold = 10
 
         while not event.is_set():
 
@@ -186,6 +227,7 @@ def worker_fn(
                 res['assignment_id'] = job['assignment_id']
                 res['submission_id'] = job['submission_id']
                 res['blacklisted'] = False
+                res['end_time'] = None
                 r.close()
             except:
                 # print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Failed | Container hadoop-c{worker_rank}{rank} Crashed.")
@@ -194,8 +236,12 @@ def worker_fn(
                 res['assignment_id'] = job['assignment_id']
                 res['submission_id'] = job['submission_id']
                 res['blacklisted'] = False
+                res['end_time'] = None
                 res['status'] = 'FAILED'
-                res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
+                if blacklist_threshold - team_dict[key] > 0:
+                    res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
+                else:
+                    res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. Team Blacklisted!'
                 # for port in port_list:
                 #     port_kill_process = subprocess.Popen([f"sudo fuser -k {port}/tcp"], shell=True, text=True)
                 #     _ = port_kill_process.wait()
@@ -223,12 +269,14 @@ def worker_fn(
                 team_dict[key] -= 1
                 print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
             else:
-
                 if "Container Crashed" in res['job_output']:
                     if team_dict[key] <= blacklist_threshold:
                         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
                     else:
+                        end_time =  datetime.now() + timedelta(minutes=blacklist_duration)
+                        blacklist_queue.put({'team_id': job["team_id"], 'assignment_id': job["assignment_id"], 'end_time': end_time})
                         res['blacklisted'] = True
+                        res['end_time'] = end_time
                         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
                 else:
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
@@ -254,6 +302,12 @@ def worker_fn(
         threads.append(t)
         thread_events.append(e)
 
+    blacklist_queue = PriorityQueue()
+    e = threading.Event()
+    t = threading.Thread(target=blacklist_thread_fn, args=(blacklist_queue,e,))
+    threads.append(t)
+    thread_events.append(e)
+
     print(f"[{get_datetime()}] [worker_{worker_rank}]\tStarting {num_threads} threads.")
     for t in threads:
         t.start()
@@ -262,11 +316,12 @@ def worker_fn(
         print(f'[{get_datetime()}] [worker_{worker_rank}]\tStopping.')
         for i in thread_events:
             i.set()
-        for i in threads:
+        for i in threads[:-1]:
             i.join()
-        for i in threads:
+        for i in threads[:-1]:
             if i.is_alive():
                 i.join()
+        threads[-1].join(60)
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)

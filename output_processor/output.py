@@ -25,8 +25,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
         def flush(self):
             pass
 
-    def get_datetime(add_hours=0) -> str:  
-        now = datetime.now() + timedelta(hours=add_hours)
+    def get_datetime() -> str:  
+        now = datetime.now()
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
 
@@ -82,6 +82,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             submissionId = str(data['submission_id'])
             message = data["job_output"]
             teamBlacklisted = data["blacklisted"]
+            end_time = data["end_time"]
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
@@ -103,13 +104,20 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 doc['blacklisted']['status'] = teamBlacklisted
                 
                 if teamBlacklisted:
-                    doc['blacklisted']['message'] = f"You are blocked from submitting. Come back at {get_datetime(add_hours=5)} to submit again."
+                    doc['blacklisted']['message'] = f"You are blocked from submitting. Come back at {end_time.strftime('%d/%m/%Y %H:%M:%S')} to submit again."
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
-                
+
+                error_logs = ""
+
+                if os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
+                    with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
+                        error_logs = f.read()
+
                 mail_data = {}
                 mail_data['teamId'] = teamId
                 mail_data['submissionId'] = str(submissionId)
                 mail_data['submissionStatus'] = message
+                mail_data['attachment'] = error_logs
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
 
@@ -139,6 +147,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 mail_data['teamId'] = teamId
                 mail_data['submissionId'] = str(submissionId)
                 mail_data['submissionStatus'] = message
+                mail_data['attachment'] = ""
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
 

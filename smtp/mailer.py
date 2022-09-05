@@ -5,6 +5,7 @@ import threading
 
 from time import sleep
 from datetime import datetime
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from smtp.email_service import EmailingService
 from smtp import mail_broker, mail_queue, mail_user, mail_passwd
@@ -83,6 +84,7 @@ def mailer_fn():
         teamId = mail_message["teamId"]
         submissionId = int(mail_message["submissionId"])
         submissionStatus = str(mail_message["submissionStatus"])
+        error_logs = str(mail_message['attachment'])
 
         emails = mailer.get_email_list(teamId)
         
@@ -97,8 +99,14 @@ def mailer_fn():
         msg['From'] = sent_from
         msg['To'] = ', '.join(emails)
         msg.attach(html)
+
+        if error_logs != "":
+            attachment = MIMEBase('application', 'octet-stream')
+            attachment.set_payload(error_logs)
+            attachment.add_header('Content-Disposition', 'attachment; filename="error.txt"')
+            msg.attach(attachment)
         
-        mail_server.sendmail(sent_from, emails, msg.as_string())
+        mail_server.sendmail(sent_from, emails, msg.as_bytes())
 
     def signal_handler(sig, frame):
         print(f'[{get_datetime()}] [output_processor]\tStopping.')

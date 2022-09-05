@@ -22,15 +22,19 @@ PORT = 10000
 
 HDFS = "/opt/hadoop/bin/hdfs"
 HADOOP = "/opt/hadoop/bin/hadoop"
+HADOOP_LOGS = f'/opt/hadoop/logs/userlogs/'
 
 PATH_TO_STREAMING = "$HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.2.2.jar"
 SUBMISSIONS = "submissions"
 
 JOBHISTORY_URL = "http://localhost:19888/ws/v1/history/mapreduce/jobs"
 
-TASK_OUTPUT_PATH = {"A1T1":"task-1-output", "A1T2":"task-2-output"}
+TASK_OUTPUT_PATH = {"A2T1":"task-1-output", "A2T2":"task-2-output"}
 
 FILEPATH = os.path.join(os.getcwd(), 'output')
+
+os.environ['TZ'] = 'Asia/Kolkata'
+time.tzset()
 
 class Logger:
     def __init__(self) -> None:
@@ -73,11 +77,11 @@ def run_job():
     MAPPER = request.form["mapper"]
     REDUCER = request.form["reducer"] 
 
-    logger.mark(f"Starting Hadoop Job. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Submission ID: {SUBMISSION_ID}")
+    logger.mark(f"Starting Hadoop Job. Team ID : {TEAM_ID} Assignment ID : {ASSIGNMENT_ID} Submission ID : {SUBMISSION_ID}")
 
     job_result = run_hadoop_job(TEAM_ID, ASSIGNMENT_ID, SUBMISSION_ID, TIMEOUT, MAPPER, REDUCER)
 
-    logger.mark(f"Hadoop Job Completed. Team ID: {TEAM_ID} Assignment ID: {ASSIGNMENT_ID} Submission ID: {SUBMISSION_ID}\n")
+    logger.mark(f"Hadoop Job Completed. Team ID : {TEAM_ID} Assignment ID : {ASSIGNMENT_ID} Submission ID : {SUBMISSION_ID}\n")
 
     return jsonify(job_result)
 
@@ -167,14 +171,15 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
     status = None
 
     if current_job["name"] == job_name:
+        
+        if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
+                os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+
         if current_job["state"] == "SUCCEEDED":
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Completed Successfully")
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Completed Successfully!"
             job_output = "Good Job!"
             status = current_job["state"]
-            
-            if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
-                os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
 
             if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
                 os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
@@ -184,10 +189,36 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             process_code = process.wait()
 
         elif current_job["state"] == "FAILED":
+            application_id = current_job["id"]
+            application_id = application_id.split("_")[1:]
+            application_id = ["application"] + application_id
+            application_id = "_".join(application_id)
+
+            log_path = os.path.join(HADOOP_LOGS, application_id)
+            containers_logs = []
+            for folders in os.listdir(log_path):
+                containers_logs.append(os.path.join(log_path, folders, "stderr"))
+
+            error_logs = [
+                "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n"
+            ]
+
+            for stderr_logs in containers_logs:
+                with open(stderr_logs, "r") as f:
+                    title = stderr_logs.split("/")[-2:]
+                    title = "/".join(title)
+                    error_logs.append(title+f"\n{'-' * len(title)}\n\n")
+                    error_logs.append(f.read()+"\n")
+            
+            error_logs = "\n".join(error_logs)
+            
+            with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
+                f.write(error_logs)
+
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed")
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed."
             status = current_job["state"]
-            job_output = "God knows what you are doing! Something is wrong in input files. Your submission might have thrown an error or has exceeded time limits."
+            job_output = "Failed! Your submission might have thrown an error or has exceeded time limits. Logs have been mailed to you."
             
     else:
         print(f"\n\nJob {job_name} was not recorded in Job History Server\n\n")

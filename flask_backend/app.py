@@ -113,6 +113,7 @@ def createApp():
             mail_data['teamId'] = data['teamId']
             mail_data['submissionId'] = str(data['submissionId'])
             mail_data['submissionStatus'] = message
+            mail_data['attachment'] = ""
             mail_data = pickle.dumps(mail_data)
             mail_queue.enqueue(mail_data)
 
@@ -138,13 +139,13 @@ def createApp():
 
         if mapper_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
             print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Mapper Shebang Not Present. Check if your file is in LF format.")
-            update_submission(marks=-1, message='Mapper Shebang Not Present. Check if your file is in LF format.', data=data, send_mail=True)
+            update_submission(marks=-1, message='Mapper Shebang Not Present. Make sure shebang is present as the first line and check if file is in LF format.', data=data, send_mail=True)
             res = {"msg": "Mapper shebang not present", "len": len(queue)}
             return jsonify(res)
 
         if reducer_data.strip().split("\n")[0] != '#!/usr/bin/env python3':
             print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Reducer Shebang Not Present. Check if your file is in LF format.")
-            update_submission(marks=-1, message='Reducer Shebang Not Present. Check if your file is in LF format.', data=data, send_mail=True)
+            update_submission(marks=-1, message='Reducer Shebang Not Present. Make sure shebang is present as the first line and check if file is in LF format.', data=data, send_mail=True)
             res = {"msg": "Reducer shebang not present", "len": len(queue)}
             return jsonify(res)
 
