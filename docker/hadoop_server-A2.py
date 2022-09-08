@@ -150,9 +150,9 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
     timestamp = str(time.time())
     job_name = team_id + "_" + assignment_id + "_" + timestamp
-    if assignment_id == "A1T1":
+    if assignment_id == "A2T1":
         mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A1/input/dataset.json -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
-    elif assignment_id == "A1T2":
+    elif assignment_id == "A2T2":
         mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "'/{os.path.join(task_path,'mapper.py')}' 70 -20 25" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A1/input/dataset.json -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
     print(mapred_job)
     logger.mark(f"Spawning Hadoop Process")
@@ -200,6 +200,9 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 containers_logs.append(os.path.join(log_path, folders, "stderr"))
 
             error_logs = [
+                f"Submission ID : {submission_id}",
+                f"Team ID : {team_id}",
+                f"Assignment ID : {assignment_id}"
                 "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n"
             ]
 

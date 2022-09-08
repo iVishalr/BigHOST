@@ -130,9 +130,9 @@ def worker_fn(
                 sleep(120)
                 continue
 
-            if datetime.now() < data["end_time"]:
+            if datetime.now() < data[0]:
                 blacklist_queue.put(data)
-                interval = (data["end_time"] - datetime.now()).seconds
+                interval = (data[0] - datetime.now()).seconds
                 print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tSleeping for {interval+5}s.")
                 sleep(interval+5)
                 continue
@@ -274,7 +274,7 @@ def worker_fn(
                         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
                     else:
                         end_time =  datetime.now() + timedelta(minutes=blacklist_duration)
-                        blacklist_queue.put({'team_id': job["team_id"], 'assignment_id': job["assignment_id"], 'end_time': end_time})
+                        blacklist_queue.put((end_time, {'team_id': job["team_id"], 'assignment_id': job["assignment_id"]}))
                         res['blacklisted'] = True
                         res['end_time'] = end_time
                         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
