@@ -263,7 +263,6 @@ def worker_fn(
                     host_output_dir, 
                     container_output_dir
                 )
-                sleep(60)
             
             if res['status'] != "FAILED":
                 team_dict[key] -= 1

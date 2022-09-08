@@ -138,7 +138,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 else:
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Failed'
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Wrong Answer'
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'
 
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
