@@ -32,14 +32,17 @@ TASK_OUTPUT_PATH = {"A1T1":"task-1-output", "A1T2":"task-2-output"}
 
 FILEPATH = os.path.join(os.getcwd(), 'output')
 
+def get_datetime() -> str:
+    now = datetime.now()
+    timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
+    return timestamp
+
 class Logger:
     def __init__(self) -> None:
         self.logs = []
     
     def mark(self, message: str) -> None:
-        now = datetime.now()
-        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
-        msg = f"[{timestamp}]   {message}"
+        msg = f"[{get_datetime()}]   {message}"
         self.logs.append(msg)
 
     def send_logs():

@@ -36,6 +36,11 @@ FILEPATH = os.path.join(os.getcwd(), 'output')
 os.environ['TZ'] = 'Asia/Kolkata'
 time.tzset()
 
+def get_datetime() -> str:
+    now = datetime.now()
+    timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
+    return timestamp
+
 class Logger:
     def __init__(self) -> None:
         self.logs = []
@@ -43,7 +48,7 @@ class Logger:
     def mark(self, message: str) -> None:
         now = datetime.now()
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
-        msg = f"[{timestamp}]   {message}"
+        msg = f"[{get_datetime()}]   {message}"
         self.logs.append(msg)
 
     def send_logs():
@@ -96,6 +101,45 @@ def delete_hdfs_directories(dirname: str) -> int:
     res = process.wait()
     logger.mark(f"Deleted Directory - hdfs:{dirname}")
     return res
+
+def check_convergence(w_file_path, w1_file_path, iteration_log_path, convergence_limit, iter):
+    """
+    Checks convergence of file w to w1
+    """
+    total_nodes = 0
+    converged_nodes = 0
+
+    w_file = open(w_file_path, "r")
+    w1_file = open(w1_file_path, "r")
+    log_file = open(iteration_log_path, "a+")
+
+    for w, w1 in zip(w_file, w1_file):
+        total_nodes += 1
+        old_pagerank = float(w.split(',')[1])
+        new_pagerank = float(w1.split(',')[1])
+
+        if abs(old_pagerank - new_pagerank) < convergence_limit:
+            converged_nodes += 1
+    
+    if iter == 1:
+        log_file.write(
+            f"Begining Convergence at {get_datetime()}\n"
+        )
+    
+    log_file.write(
+        f"Iteration - {iter} : {converged_nodes}/{total_nodes}\n"
+    )
+    flag = False
+    if converged_nodes == total_nodes:
+        log_file.write(
+            f"Convergence occured at {get_datetime()}\n"
+        )
+        flag = True
+    
+    os.remove(w_file_path)
+    root_path = w_file_path.split("/")[:-1]
+    os.rename(os.path.join(root_path, "w1"), os.path.join(root_path, "w"))
+    return flag
 
 def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, reducer: str):
     """
@@ -150,30 +194,27 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
     timestamp = str(time.time())
     job_name = team_id + "_" + assignment_id + "_" + timestamp
-    if assignment_id == "A2T1":
-        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A1/input/dataset.json -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
-    elif assignment_id == "A2T2":
-        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "'/{os.path.join(task_path,'mapper.py')}' 70 -20 25" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A1/input/dataset.json -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
-    print(mapred_job)
-    logger.mark(f"Spawning Hadoop Process")
-
-    mapred_process = subprocess.Popen([
-        mapred_job
-    ], shell=True, text=True, preexec_fn=os.setsid)
-
-    process_exit_code = mapred_process.wait()
-    r = requests.get(JOBHISTORY_URL)
-    data = json.loads(r.text)
-    jobs = data["jobs"]["job"]
     
-    current_job = jobs[-1]
     job_output = None
     status = None
 
-    if current_job["name"] == job_name:
+    if assignment_id == "A2T1":
+
+        logger.mark(f"Spawning Hadoop Process")
+        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'w')}'" -input /A2/input/graph.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+        mapred_process = subprocess.Popen([
+            mapred_job
+        ], shell=True, text=True, preexec_fn=os.setsid)
+        process_exit_code = mapred_process.wait()
+
+        r = requests.get(JOBHISTORY_URL)
+        data = json.loads(r.text)
+        jobs = data["jobs"]["job"]
+        
+        current_job = jobs[-1]
         
         if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
-                os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+            os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
 
         if current_job["state"] == "SUCCEEDED":
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Completed Successfully")
@@ -222,13 +263,89 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed."
             status = current_job["state"]
             job_output = "Failed! Your submission might have thrown an error or has exceeded time limits. Logs have been mailed to you."
+        
+    elif assignment_id == "A2T2":
+        it = 1
+        CONVERGED = False
+
+        convergence_limit = 0.05
+
+        while not CONVERGED:
+            logger.mark(f"Spawning Hadoop Process It - {it}")
+
+            _ = delete_hdfs_directories(f"/{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}")
+
+            mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "'/{os.path.join(task_path,'mapper.py')}' '/{os.path.join(task_path,'w')}' '/A2/page_embeddings.json'" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A2/input/adjacency_list.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+            mapred_process = subprocess.Popen([
+                mapred_job
+            ], shell=True, text=True, preexec_fn=os.setsid)
+            process_exit_code = mapred_process.wait()
+        
+            r = requests.get(JOBHISTORY_URL)
+            data = json.loads(r.text)
+            jobs = data["jobs"]["job"]
             
-    else:
-        print(f"\n\nJob {job_name} was not recorded in Job History Server\n\n")
-        logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Exceeded time limits")
-        msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Submission has taken more time than the alloted time. Submission has been killed!"
-        job_output = "God knows what you are doing!"
-        status = "KILLED"
+            current_job = jobs[-1]
+            if current_job["state"] == "SUCCEEDED":
+                
+                if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
+                    os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
+                    os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
+                
+                process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+                process_code = process.wait()
+
+                process = subprocess.Popen([f"touch {os.path.join(task_path,'w1')}"])
+                process_code = process.wait()
+
+                process = subprocess.Popen([f"cp -r {os.path.join(FILEPATH, team_id, assignment_id, 'part-00000')} {os.path.join(task_path,'w1')}"])
+                process_code = process.wait()
+
+                CONVERGED = check_convergence(
+                    w_file_path = {os.path.join(task_path,'w')},
+                    w1_file_path = {os.path.join(task_path,'w1')},
+                    iteration_log_path = {os.path.join(FILEPATH, team_id, assignment_id, 'log.txt')},
+                    convergence_limit = convergence_limit,
+                    iter = it
+                ) # this renames W1 to W and deletes W1
+            
+            elif current_job["state"] == "FAILED":
+                application_id = current_job["id"]
+                application_id = application_id.split("_")[1:]
+                application_id = ["application"] + application_id
+                application_id = "_".join(application_id)
+
+                log_path = os.path.join(HADOOP_LOGS, application_id)
+                containers_logs = []
+                for folders in os.listdir(log_path):
+                    containers_logs.append(os.path.join(log_path, folders, "stderr"))
+
+                error_logs = [
+                    f"Submission ID : {submission_id}",
+                    f"Team ID : {team_id}",
+                    f"Assignment ID : {assignment_id}"
+                    "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n"
+                ]
+
+                for stderr_logs in containers_logs:
+                    with open(stderr_logs, "r") as f:
+                        title = stderr_logs.split("/")[-2:]
+                        title = "/".join(title)
+                        error_logs.append(title+f"\n{'-' * len(title)}\n\n")
+                        error_logs.append(f.read()+"\n")
+                
+                error_logs = "\n".join(error_logs)
+                
+                with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
+                    f.write(error_logs)
+
+                logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed")
+                msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed."
+                status = current_job["state"]
+                job_output = "Failed! Your submission might have thrown an error or has exceeded time limits. Logs have been mailed to you."
+                break # break out of iterative hadoop job 
+
+            it += 1
 
     res = cleanup(team_id, assignment_id, submission_id)
 
@@ -359,10 +476,13 @@ def initialize_environment(add_dataset=True) -> Tuple:
         os.mkdir(SUBMISSIONS)
 
         # following stuff is temporary. Only for testing purposes.
-        _ = create_hdfs_directory("/A1")
-        _ = create_hdfs_directory("/A1/input")
+        _ = create_hdfs_directory("/A2")
+        _ = create_hdfs_directory("/A2/input")
 
-        p = subprocess.Popen([f"{HDFS} dfs -put /A1/dataset.json /A1/input"], shell=True, text=True)
+        p = subprocess.Popen([f"{HDFS} dfs -put /A2/graph.txt /A2/input"], shell=True, text=True)
+        _ = p.wait()
+
+        p = subprocess.Popen([f"{HDFS} dfs -put /A2/adjacency_list.txt /A2/input"], shell=True, text=True)
         _ = p.wait()
     
     return 0, error_logs 

@@ -40,6 +40,47 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
 
+    def preprocess_A1_output(teamId, assignmentId, output_path, key_path):
+        pass
+
+    def preprocess_A2_output(teamId, assignmentId, output_path, key_path, convergence_limit):
+        if assignmentId == "A2T1":
+            pass
+
+        elif assignmentId == "A2T2":
+            preprocessed_output = []
+            output_file = open(output_path,"r")
+            answer_file = open(answer_key_path, "r")
+            flag = True
+            for output_line, answer_line in zip(output_file, answer_file):
+                op_page, op_rank = output_line.strip().split(",")
+                answer_page, answer_rank = answer_line.strip().split(",")
+
+                if op_page != answer_page:
+                    flag = False
+                    break
+
+                op_rank = float(op_rank)
+                answer_rank = float(answer_rank)
+
+                if abs(op_rank - answer_rank) <= convergence_limit:
+                    preprocessed_output.append((op_page, str(answer_rank)))
+
+            output_file.close()
+            answer_file.close()
+
+            if not flag:
+                preprocessed_output = []
+            else:
+                for i in range(len(preprocessed_output)):
+                    page, rank = preprocessed_output[i]
+                    preprocessed_output[i] = f"{page},{rank}\n"
+
+                output_file = open(output_path, "w")
+                preprocessed_output = "".join(preprocessed_output)
+                output_file.write(preprocessed_output)
+                output_file.close()
+
     def thread_fn(rank, event: threading.Event):
         interval = 0.05
         timeout = 0.05
@@ -123,6 +164,13 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
 
             else:
                 # Has given outuput, need to check if it is corect
+                # preprocess the output files to match answer key if output follows certain conditions
+                if "A1" in assignmentId:
+                    preprocess_A1_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"))
+                elif "A2" in assignmentId:
+                    convergence_limit = 0.05
+                    preprocess_A2_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), convergence_limit=convergence_limit)
+
                 if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
                     output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
                 else:
