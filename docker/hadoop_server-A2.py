@@ -1,3 +1,4 @@
+from crypt import methods
 import shutil
 import requests
 import json
@@ -22,6 +23,7 @@ PORT = 10000
 
 HDFS = "/opt/hadoop/bin/hdfs"
 HADOOP = "/opt/hadoop/bin/hadoop"
+YARN = "/opt/hadoop/bin/yarn"
 HADOOP_LOGS = f'/opt/hadoop/logs/userlogs/'
 
 PATH_TO_STREAMING = "$HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.2.2.jar"
@@ -89,6 +91,30 @@ def run_job():
     logger.mark(f"Hadoop Job Completed. Team ID : {TEAM_ID} Assignment ID : {ASSIGNMENT_ID} Submission ID : {SUBMISSION_ID}\n")
 
     return jsonify(job_result)
+
+@app.route("/kill_job", methods=["GET"])
+def kill_hadoop_job():
+    """
+    Kills the currently running job
+    """
+    r = requests.get("http://localhost:8088/ws/v1/cluster/apps")
+    data = json.loads(r.text)
+    print(data)
+    data = data["apps"]["app"]
+    
+    current_job = data[0]
+    current_job_state = current_job["state"]
+    application_id = current_job["id"]
+
+    print(f"Killing Application ID : {application_id}")
+    if current_job_state == "RUNNING":
+        kill_process = subprocess.Popen([f"{YARN} application -kill {application_id}"], shell=True, text=True)
+        _ = kill_process.wait()
+        res = {"job": application_id, "Message": "Killed"}
+        print(f"Job : {application_id} - Killed!")
+    else:
+        res = {"job": application_id, "Message": "Job not running. Hence not killed."}
+    return res
 
 def create_hdfs_directory(dirname: str) -> int:
     process = subprocess.Popen([f"{HDFS} dfs -mkdir {dirname}"], shell=True, text=True)
@@ -197,6 +223,8 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
     
     job_output = None
     status = None
+    
+    msg = ""
 
     if assignment_id == "A2T1":
 
@@ -209,14 +237,18 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
         r = requests.get(JOBHISTORY_URL)
         data = json.loads(r.text)
-        jobs = data["jobs"]["job"]
-        
-        current_job = jobs[-1]
+        jobs = data["jobs"]
+        flag = True
+        if len(jobs) == 0:
+            flag = False
+        else:
+            jobs = jobs["job"]
+            current_job = jobs[-1]
         
         if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
             os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
 
-        if current_job["state"] == "SUCCEEDED":
+        if flag and current_job["state"] == "SUCCEEDED":
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Completed Successfully")
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Completed Successfully!"
             job_output = "Good Job!"
@@ -229,7 +261,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
             process_code = process.wait()
 
-        elif current_job["state"] == "FAILED":
+        elif flag and current_job["state"] == "FAILED":
             application_id = current_job["id"]
             application_id = application_id.split("_")[1:]
             application_id = ["application"] + application_id
@@ -243,8 +275,8 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             error_logs = [
                 f"Submission ID : {submission_id}",
                 f"Team ID : {team_id}",
-                f"Assignment ID : {assignment_id}"
-                "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n"
+                f"Assignment ID : {assignment_id}",
+                "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n",
             ]
 
             for stderr_logs in containers_logs:
@@ -283,10 +315,15 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
         
             r = requests.get(JOBHISTORY_URL)
             data = json.loads(r.text)
-            jobs = data["jobs"]["job"]
+            jobs = data["jobs"]
+            flag = True
+            if len(jobs) == 0:
+                flag = False
+            else:
+                jobs = jobs["job"]
+                current_job = jobs[-1]
             
-            current_job = jobs[-1]
-            if current_job["state"] == "SUCCEEDED":
+            if flag and current_job["state"] == "SUCCEEDED":
                 
                 if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
                     os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
@@ -309,7 +346,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                     iter = it
                 ) # this renames W1 to W and deletes W1
             
-            elif current_job["state"] == "FAILED":
+            elif flag and current_job["state"] == "FAILED":
                 application_id = current_job["id"]
                 application_id = application_id.split("_")[1:]
                 application_id = ["application"] + application_id
@@ -343,7 +380,9 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed."
                 status = current_job["state"]
                 job_output = "Failed! Your submission might have thrown an error or has exceeded time limits. Logs have been mailed to you."
-                break # break out of iterative hadoop job 
+                break # break out of iterative hadoop job
+            elif not flag:
+                break
 
             it += 1
 

@@ -150,9 +150,11 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
 
                 error_logs = ""
 
-                if os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
+                if "Time Limit" not in message and os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
                     with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
                         error_logs = f.read()
+                else:
+                    error_logs = f"Team ID : {teamId}\nAssignment ID : {assignmentId}\nSubmission ID : {submissionId}\n\nTime Limit Exceeded! Make your code run faster and more memory efficient.\n"
 
                 mail_data = {}
                 mail_data['teamId'] = teamId

@@ -3,13 +3,14 @@ import json
 import requests
 import time
 from time import sleep
+from pprint import pprint
 
 # r = requests.get("http://127.0.0.1:9000/empty-queue")
 # res = json.loads(r.text)
 # print(res)
 # print(r.status_code)
 
-url = "http://35.213.133.27:9000/sanity-check"
+# url = "http://35.213.133.27:9000/sanity-check"
 # url = "http://localhost:9000/sanity-check"
 
 # data = {'teamId': 'BD1_ADMIN_09', 
@@ -18,37 +19,37 @@ url = "http://35.213.133.27:9000/sanity-check"
 # 'reducer': '#!/usr/bin/env python3\nimport sys\n\ndef reducer():\n    path = sys.argv[1]\n    f = open(path,"w+")\n    current_key = None\n    s = \'\'\n    for line in sys.stdin:\n        key,val = line.strip().split(\',\')\n        if current_key == None:\n            current_key = key\n            s = f"{key} [{val}"\n            f.write(f"{key},1\\n")\n            continue\n        if key == current_key:\n            s += f",{val}"\n        else:\n            print(s+"]")\n            current_key = key\n            s = f"{key} [{val}"\n            f.write(f"{key},1\\n")\n    print(s+"]")\n    f.close()\n\nif __name__ == \'__main__\':\n    reducer()\n', 
 # 'submissionId': time.time()}
 
-data = {'teamId': 'BD1_ADMIN_09', 
-'assignmentId': 'A1T2', 
-'mapper': f'{open("./docker/A1/task2/mapper.py").read()}', 
-'reducer': f'{open("./docker/A1/task2/reducer.py").read()}', 
-'submissionId': time.time()}
+# data = {'teamId': 'BD1_ADMIN_09', 
+# 'assignmentId': 'A1T2', 
+# 'mapper': f'{open("./docker/A1/task2/mapper.py").read()}', 
+# 'reducer': f'{open("./docker/A1/task2/reducer.py").read()}', 
+# 'submissionId': time.time()}
 
 
 
-for i in range(2):
-    data['submissionId'] = int(str(time.time_ns())[:13])
-    payload = json.dumps(data)
-    r = requests.post(url, data=payload)
-    print(f"{i+1} {r.status_code}")
-    res = json.loads(r.text)
-    print(res)
+# for i in range(2):
+#     data['submissionId'] = int(str(time.time_ns())[:13])
+#     payload = json.dumps(data)
+#     r = requests.post(url, data=payload)
+#     print(f"{i+1} {r.status_code}")
+#     res = json.loads(r.text)
+#     print(res)
 
-data = {'teamId': 'BD1_ADMIN_09', 
-'assignmentId': 'A1T1', 
-'mapper': f'{open("./docker/A1/task1/mapper.py").read()}', 
-'reducer': f'{open("./docker/A1/task1/reducer.py").read()}', 
-'submissionId': time.time()}
+# data = {'teamId': 'BD1_ADMIN_09', 
+# 'assignmentId': 'A1T1', 
+# 'mapper': f'{open("./docker/A1/task1/mapper.py").read()}', 
+# 'reducer': f'{open("./docker/A1/task1/reducer.py").read()}', 
+# 'submissionId': time.time()}
 
 
 
-for i in range(2):
-    data['submissionId'] = int(str(time.time_ns())[:13])
-    payload = json.dumps(data)
-    r = requests.post(url, data=payload)
-    print(f"{i+1} {r.status_code}")
-    res = json.loads(r.text)
-    print(res)
+# for i in range(2):
+#     data['submissionId'] = int(str(time.time_ns())[:13])
+#     payload = json.dumps(data)
+#     r = requests.post(url, data=payload)
+#     print(f"{i+1} {r.status_code}")
+#     res = json.loads(r.text)
+#     print(res)
 
 # with open("./test/m.py", "r") as f:
 #     data['mapper'] = f.read()
@@ -207,7 +208,15 @@ for i in range(2):
 # print(res)
 # print(r.status_code)
 
-r = requests.get("http://127.0.0.1:10001/queue-length")
-res = json.loads(r.text)
-print(res)
-print(r.status_code)
+# r = requests.get("http://127.0.0.1:10001/queue-length")
+# res = json.loads(r.text)
+# print(res)
+# print(r.status_code)
+
+# r = requests.get("http://localhost:8088/ws/v1/cluster/apps")
+r = requests.get("http://localhost:33155/ws/v1/history/mapreduce/jobs")
+data = json.loads(r.text)
+print(data)
+# pprint(data["apps"]["app"], indent=3)
+
+# print(apps)

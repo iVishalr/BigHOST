@@ -172,7 +172,11 @@ def createApp():
             print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Passed Sanity Check.")
             update_submission(marks=-1, message='Sanity Check Passed', data=data)
 
-        data['timeout'] = 30
+        if "T1" in data['assignmentId']:
+            data['timeout'] = 30
+        elif "T2" in data['assignmentId']:
+            data['timeout'] = 120
+
         update_submission(marks=-1, message='Queued for Execution', data=data)
 
         data = pickle.dumps(data)

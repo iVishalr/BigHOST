@@ -220,7 +220,7 @@ def worker_fn(
             status_code = 500
             
             try:
-                r = requests.post(request_url, data=job, timeout=150)
+                r = requests.post(request_url, data=job, timeout=float(job["timeout"]))
                 status_code = r.status_code
                 res = json.loads(r.text)
                 res['team_id'] = job['team_id']
@@ -229,8 +229,21 @@ def worker_fn(
                 res['blacklisted'] = False
                 res['end_time'] = None
                 r.close()
+
+            except requests.exceptions.Timeout:
+                kill_url = f"http://{docker_ip}:{port_list[2]}/kill_job"
+                kill_request = requests.get(kill_url)
+                kill_status = kill_request.status_code
+                res = {}
+                res['team_id'] = job['team_id']
+                res['assignment_id'] = job['assignment_id']
+                res['submission_id'] = job['submission_id']
+                res['blacklisted'] = False
+                res['end_time'] = None
+                res['status'] = 'FAILED'
+                res['job_output'] = f"Job Killed. Time Limit Exceeded!"
+            
             except:
-                # print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Failed | Container hadoop-c{worker_rank}{rank} Crashed.")
                 res = {}
                 res['team_id'] = job['team_id']
                 res['assignment_id'] = job['assignment_id']
@@ -242,9 +255,6 @@ def worker_fn(
                     res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
                 else:
                     res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. Team Blacklisted!'
-                # for port in port_list:
-                #     port_kill_process = subprocess.Popen([f"sudo fuser -k {port}/tcp"], shell=True, text=True)
-                #     _ = port_kill_process.wait()
 
                 # docker_container.stop()
                 # docker_container.wait()

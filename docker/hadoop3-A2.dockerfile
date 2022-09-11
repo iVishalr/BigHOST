@@ -44,8 +44,8 @@ RUN chmod 644 /root/.ssh/config
 RUN chmod +x hadoop_server.py start-hadoop.sh restart-hadoop.sh
 RUN rm -rf ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh
 ADD hadoop_config/hadoop-env.sh ${HADOOP_HOME}/etc/hadoop/
-RUN gdown --id 1tre0xmwwUibHBXrn1n9iEhcWIhsreTep
-RUN mkdir A1 && mv /dataset.json /A1/
+RUN gdown --id 1CDS5N73wBW2jYaR1rGhYz7zPS5bEV2EB
+RUN mkdir A2 && mv /graph.txt /A2/
 
 # add new ports here
 EXPOSE 8088 50070 50075 50030 50060 9870 10000 19888

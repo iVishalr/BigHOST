@@ -7,6 +7,8 @@ windows:
       - docker rm redis-stack-server
       - docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
   - flask_backend:
+      - sleep 10
       - gunicorn -w 4 --preload --timeout 90 --bind 0.0.0.0:9000 "flask_backend.app:createApp()"
   - mailer:
+      - sleep 12
       - python3 -m smtp.mailer

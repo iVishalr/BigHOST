@@ -7,10 +7,14 @@ windows:
       - docker rm redis-stack-server
       - docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
   - queuer:
+      - sleep 10
       - gunicorn -w 2 --preload --timeout 90 --bind 0.0.0.0:10001 "job_tracker.queuer:app"
   - mailer:
+      - sleep 10
       - python3 -m smtp.mailer
   - output:
+      - sleep 10
       - python3 -m output_processor.output
   - executor:
+      - sleep 15
       - python3 -m job_tracker.executor
