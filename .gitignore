@@ -6,6 +6,9 @@ answer/A1T2
 *.txt
 part-00000
 w
+w1
+sample*
+*.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

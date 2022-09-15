@@ -164,6 +164,7 @@ def check_convergence(w_file_path, w1_file_path, iteration_log_path, convergence
     
     os.remove(w_file_path)
     root_path = w_file_path.split("/")[:-1]
+    root_path = "/".join(root_path)
     os.rename(os.path.join(root_path, "w1"), os.path.join(root_path, "w"))
     return flag
 
@@ -227,7 +228,6 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
     msg = ""
 
     if assignment_id == "A2T1":
-
         logger.mark(f"Spawning Hadoop Process")
         mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'w')}'" -input /A2/input/graph.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
         mapred_process = subprocess.Popen([
@@ -302,6 +302,12 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
         convergence_limit = 0.05
 
+        # copy the files from A2 directory to current directory
+        copy_process = subprocess.Popen([f"cp -r /A2/w /{os.path.join(task_path)}"], shell=True, text=True)
+        _ = copy_process.wait()
+
+        print("copied files!")
+
         while not CONVERGED:
             logger.mark(f"Spawning Hadoop Process It - {it}")
 
@@ -324,6 +330,9 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 current_job = jobs[-1]
             
             if flag and current_job["state"] == "SUCCEEDED":
+
+                if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
+                    os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
                 
                 if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
                     os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
@@ -332,19 +341,21 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
                 process_code = process.wait()
 
-                process = subprocess.Popen([f"touch {os.path.join(task_path,'w1')}"])
+                process = subprocess.Popen([f"touch /{os.path.join(task_path,'w1')}"], shell=True, text=True)
                 process_code = process.wait()
 
-                process = subprocess.Popen([f"cp -r {os.path.join(FILEPATH, team_id, assignment_id, 'part-00000')} {os.path.join(task_path,'w1')}"])
+                process = subprocess.Popen([f"cp -r {os.path.join(FILEPATH, team_id, assignment_id, 'part-00000')} /{os.path.join(task_path,'w1')}"], shell=True, text=True)
                 process_code = process.wait()
 
                 CONVERGED = check_convergence(
-                    w_file_path = {os.path.join(task_path,'w')},
-                    w1_file_path = {os.path.join(task_path,'w1')},
-                    iteration_log_path = {os.path.join(FILEPATH, team_id, assignment_id, 'log.txt')},
+                    w_file_path = os.path.join(task_path,'w'),
+                    w1_file_path = os.path.join(task_path,'w1'),
+                    iteration_log_path = os.path.join(FILEPATH, team_id, assignment_id, 'log.txt'),
                     convergence_limit = convergence_limit,
                     iter = it
                 ) # this renames W1 to W and deletes W1
+                status = current_job["state"]
+                job_output = "Good Job!"
             
             elif flag and current_job["state"] == "FAILED":
                 application_id = current_job["id"]

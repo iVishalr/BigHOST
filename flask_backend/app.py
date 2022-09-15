@@ -60,6 +60,28 @@ def createApp():
         for file in os.listdir('compile-test'):
             if file.endswith('.py'):
                 os.remove('compile-test/' + file)
+
+    def get_timeouts(assignment_id):
+        timeout = 30
+        if "A1" in assignment_id:
+            if "T1" in assignment_id:
+                timeout = 30
+            elif "T2" in assignment_id:
+                timeout = 30
+        elif "A2" in assignment_id:
+            if "T1" in assignment_id:
+                timeout = 30
+            elif "T2" in assignment_id:
+                timeout = 300
+        elif "A3" in assignment_id:
+            if "T1" in assignment_id:
+                timeout = 30
+            elif "T2" in assignment_id:
+                timeout = 30
+        else:
+            timeout = 30
+
+        return timeout
         
     def update_submission(marks, message, data, send_mail=False):
         if '1' == data['teamId'][2]:
@@ -172,10 +194,7 @@ def createApp():
             print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Passed Sanity Check.")
             update_submission(marks=-1, message='Sanity Check Passed', data=data)
 
-        if "T1" in data['assignmentId']:
-            data['timeout'] = 30
-        elif "T2" in data['assignmentId']:
-            data['timeout'] = 120
+        data["timeout"] = get_timeouts(assignment_id=data['assignmentId'])
 
         update_submission(marks=-1, message='Queued for Execution', data=data)
 

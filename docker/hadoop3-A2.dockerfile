@@ -44,8 +44,14 @@ RUN chmod 644 /root/.ssh/config
 RUN chmod +x hadoop_server.py start-hadoop.sh restart-hadoop.sh
 RUN rm -rf ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh
 ADD hadoop_config/hadoop-env.sh ${HADOOP_HOME}/etc/hadoop/
-RUN gdown --id 1CDS5N73wBW2jYaR1rGhYz7zPS5bEV2EB
-RUN mkdir A2 && mv /graph.txt /A2/
+RUN gdown --id 1OZHGglsceA8ZGH5uWI9dkLHU2NI4ytQO
+RUN gdown --id 1x8I8fneLQhYtR-r0rqjDYQSGMkalip2G
+RUN gdown --id 1khV5A0X14q7rHqYZDeoS0nuKI4AhJsWA
+RUN gdown --id 1LpDceRLDTvGOY-H1bKJm2X3a9GhB3LzQ
+RUN mkdir A2 && mv /web-BerkStan.txt /A2/graph.txt
+RUN mv page_embeddings.json /A2/
+RUN mv w /A2/
+RUN mv adjacency_list.txt /A2/
 
 # add new ports here
 EXPOSE 8088 50070 50075 50030 50060 9870 10000 19888

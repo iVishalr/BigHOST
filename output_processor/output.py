@@ -50,7 +50,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
         elif assignmentId == "A2T2":
             preprocessed_output = []
             output_file = open(output_path,"r")
-            answer_file = open(answer_key_path, "r")
+            answer_file = open(key_path, "r")
             flag = True
             for output_line, answer_line in zip(output_file, answer_file):
                 op_page, op_rank = output_line.strip().split(",")
@@ -150,12 +150,14 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
 
                 error_logs = ""
 
-                if "Time Limit" not in message and os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
-                    with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
-                        error_logs = f.read()
-                else:
+                if "Time Limit" in message: 
                     error_logs = f"Team ID : {teamId}\nAssignment ID : {assignmentId}\nSubmission ID : {submissionId}\n\nTime Limit Exceeded! Make your code run faster and more memory efficient.\n"
-
+                elif "Memory Limit" in message:
+                    error_logs = f"Team ID : {teamId}\nAssignment ID : {assignmentId}\nSubmission ID : {submissionId}\n\nMemory Limit Exceeded! Make sure you are not storing anything in memory. Storing the entire dataset will exhaust memory resources. You will be flagged if you repeat this mistake.\n"
+                else:
+                    if os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
+                        with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
+                            error_logs = f.read()
                 mail_data = {}
                 mail_data['teamId'] = teamId
                 mail_data['submissionId'] = str(submissionId)
