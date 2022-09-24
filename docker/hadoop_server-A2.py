@@ -256,9 +256,9 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
             if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
                 os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
-                os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
+                # os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
                 
-            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-00000 {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
             process_code = process.wait()
 
         elif flag and current_job["state"] == "FAILED":
@@ -333,12 +333,14 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
                 if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
                     os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+                    # permission_process = subprocess.Popen([f"chmod -R 777 {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+                    # _ = permission_process.wait()
                 
                 if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
                     os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
-                    os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
+                    # os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
                 
-                process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+                process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-00000 {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
                 process_code = process.wait()
 
                 process = subprocess.Popen([f"touch /{os.path.join(task_path,'w1')}"], shell=True, text=True)

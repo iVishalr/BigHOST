@@ -1,3 +1,5 @@
+#!/usr/bin/sudo /usr/bin/python3
+
 import os
 import sys
 import json
@@ -52,6 +54,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             output_file = open(output_path,"r")
             answer_file = open(key_path, "r")
             flag = True
+
             for output_line, answer_line in zip(output_file, answer_file):
                 op_page, op_rank = output_line.strip().split(",")
                 answer_page, answer_rank = answer_line.strip().split(",")
@@ -64,8 +67,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 answer_rank = float(answer_rank)
 
                 if abs(op_rank - answer_rank) <= convergence_limit:
-                    preprocessed_output.append((op_page, str(answer_rank)))
+                    preprocessed_output.append((op_page, answer_rank))
 
+            # print(preprocessed_output)
             output_file.close()
             answer_file.close()
 
@@ -74,7 +78,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             else:
                 for i in range(len(preprocessed_output)):
                     page, rank = preprocessed_output[i]
-                    preprocessed_output[i] = f"{page},{rank}\n"
+                    preprocessed_output[i] = f"{page},{rank:.2f}\n"
 
                 output_file = open(output_path, "w")
                 preprocessed_output = "".join(preprocessed_output)
@@ -127,6 +131,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
 
+            os.system(f"sudo chown -R $USER:$USER {FILEPATH}/{teamId}")
+
             if not os.path.exists(FILEPATH_TEAM):
                 status = "FAILED"
 
@@ -171,6 +177,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 # preprocess the output files to match answer key if output follows certain conditions
                 if "A1" in assignmentId:
                     preprocess_A1_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"))
+                
                 elif "A2" in assignmentId:
                     convergence_limit = 0.05
                     preprocess_A2_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), convergence_limit=convergence_limit)

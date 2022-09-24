@@ -11,10 +11,10 @@ import subprocess
 
 from time import sleep
 from smtp import mail_queue
-from datetime import datetime, timedelta
 from contextlib import closing
-from typing import Dict, List, Tuple
 from queue import PriorityQueue
+from typing import Dict, List, Tuple
+from datetime import datetime, timedelta
 from job_tracker import output_queue, submissions_rr, submissions_ec, docker_client
 
 def worker_fn(
@@ -106,7 +106,7 @@ def worker_fn(
                 '9870/tcp': dn_port,
                 f'{docker_port}/tcp': hadoop_port,
                 '19888/tcp': jobhis_port,
-            }
+            },
         )
         
         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container.")

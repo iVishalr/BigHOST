@@ -328,7 +328,7 @@ if __name__ == "__main__":
     docker_image = "hadoop-3.2.2:0.1"
 
     backend_cpu_limit: int = 3
-    backend_mem_limit: str = "6000m"
+    backend_mem_limit: str = "12000m"
     backend_host_output_dir: str = f"{os.path.join(os.getcwd(),'output')}"
     backend_docker_output_dir: str = f"/output"
     backend_memswapiness: int = 0
