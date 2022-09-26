@@ -145,7 +145,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             # If status is false, directly put 0
             if status == "FAILED":
                 doc = submissions.find_one({'teamId': teamId})
-                print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed Message: {message}")
+                print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed Message : {message}")
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
                 doc['blacklisted']['status'] = teamBlacklisted
@@ -171,6 +171,13 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 mail_data['attachment'] = error_logs
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
+            
+            elif status == 'BLACKLISTED_BEFORE':
+                doc = submissions.find_one({'teamId': teamId})
+                print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : BLACKLISTED_BEFORE Message : {message}")
+                doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
+                doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
+                doc['blacklisted']['status'] = teamBlacklisted
 
             else:
                 # Has given outuput, need to check if it is corect

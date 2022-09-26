@@ -149,9 +149,9 @@ def worker_fn(
             print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tUnblacklisted Team : {data['team_id']}.")
             
             if data['team_id']+"_"+data['assignment_id'][:-2]+"T1" in team_dict:
-                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T1"] = 0
+                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T1"] = [0,0] # (num_submissions_left_for_blacklist, submission_running)
             if data['team_id']+"_"+data['assignment_id'][:-2]+"T2" in team_dict:
-                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T2"] = 0
+                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T2"] = [0,0]
         return
 
     def thread_fn(rank, event: threading.Event):
@@ -175,6 +175,7 @@ def worker_fn(
         
         interval = 0.05
         timeout = 0.05
+        prev_interval = 0.05
         process_slept = 0
 
         while not event.is_set():
@@ -183,6 +184,7 @@ def worker_fn(
 
             if queue_length == 0:
                 timeout += 0.05
+                prev_interval = interval
                 interval += timeout
                 if interval > 60:
                     interval = 60
@@ -192,6 +194,7 @@ def worker_fn(
                 sleep(interval)
                 continue
             else:
+                prev_interval = interval
                 interval = 0.05
                 timeout = 0.05
                 if process_slept:
@@ -210,14 +213,40 @@ def worker_fn(
             job = pickle.loads(serialized_job)
             start = time.time()
 
-            updateSubmission(marks=-1, message='Executing', data=job)
-
             key = job["team_id"]+"_"+job["assignment_id"]
             if key not in team_dict:
-                team_dict[key] = 0
-            
-            team_dict[key] += 1
+                team_dict[key] = [0,0]
+            else:
+                # if team already in team_dict, check whether they have been blacklisted currently, but still managed to submit a submission.
+                if blacklist_threshold - team_dict[key][0] <= 0:
+                    res = {}
+                    res['team_id'] = job['team_id']
+                    res['assignment_id'] = job['assignment_id']
+                    res['submission_id'] = job['submission_id']
+                    res['blacklisted'] = True
+                    res['end_time'] = None
+                    res['status'] = 'BLACKLISTED_BEFORE'
+                    res['job_output'] = f"Job not processed as you were blacklisted!"
+                    
+                    serialized_job_message = pickle.dumps(res)
+                    output_queue.enqueue(serialized_job_message)
+                    continue
+
+                # check if task cannot be run parallely. (Example T2 cannot be run parallely.) In that case if a submission
+                # is being executed in some other worker, then we should not execute the current submission and must be added back to queue
+                if "T2" in job["assignment_id"]:
+                    if team_dict[key][1]:
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Preempted | Job with ID : {key} was preempted as a previous job with same ID is still being processed.")
+                        serialized_job = pickle.dumps(job)
+                        queue.enqueue(serialized_job)
+                        sleep(prev_interval)
+                        continue
+
+            team_dict[key][0] += 1
+            team_dict[key][1] = 1
             status_code = 500
+
+            updateSubmission(marks=-1, message='Executing', data=job)
             
             try:
                 r = requests.post(request_url, data=job, timeout=float(job["timeout"]))
@@ -251,8 +280,9 @@ def worker_fn(
                 res['blacklisted'] = False
                 res['end_time'] = None
                 res['status'] = 'FAILED'
-                if blacklist_threshold - team_dict[key] > 0:
-                    res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
+
+                if blacklist_threshold - team_dict[key][0] > 0:
+                    res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key][0]} Submissions away from being blacklisted.'
                 else:
                     res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. Team Blacklisted!'
 
@@ -275,12 +305,14 @@ def worker_fn(
                 )
             
             if res['status'] != "FAILED":
-                team_dict[key] -= 1
+                team_dict[key][0] -= 1
+                team_dict[key][1] = 0
                 print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
             else:
+                team_dict[key][1] = 0
                 if "Container Crashed" in res['job_output']:
-                    if team_dict[key] <= blacklist_threshold:
-                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
+                    if team_dict[key][0] <= blacklist_threshold:
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key][0]} submissions away from being blacklisted.")
                     else:
                         end_time =  datetime.now() + timedelta(minutes=blacklist_duration)
                         blacklist_queue.put((end_time, {'team_id': job["team_id"], 'assignment_id': job["assignment_id"]}))
@@ -288,6 +320,7 @@ def worker_fn(
                         res['end_time'] = end_time
                         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
                 else:
+                    team_dict[key][0] -= 1
                     print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
             
             serialized_job_message = pickle.dumps(res)
