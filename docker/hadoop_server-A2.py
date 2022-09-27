@@ -360,6 +360,10 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 job_output = "Good Job!"
             
             elif flag and current_job["state"] == "FAILED":
+                
+                if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
+                    os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+
                 application_id = current_job["id"]
                 application_id = application_id.split("_")[1:]
                 application_id = ["application"] + application_id
@@ -373,7 +377,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 error_logs = [
                     f"Submission ID : {submission_id}",
                     f"Team ID : {team_id}",
-                    f"Assignment ID : {assignment_id}"
+                    f"Assignment ID : {assignment_id}",
                     "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n"
                 ]
 

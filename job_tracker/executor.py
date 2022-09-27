@@ -94,6 +94,7 @@ class ExecutorContext:
         self.thread_res = threading.Event()
         self.manager = multiprocessing.Manager()
         self.team_dict : Dict[str: int] = self.manager.dict()
+        self.running_dict : Dict[str: int] = self.manager.dict()
         self.blacklist_queue = self.manager.Queue()
 
         assert num_backends % num_workers == 0, "num_backends must be completely divisible by num_workers"
@@ -131,6 +132,7 @@ class ExecutorContext:
         buffer.append(f"thread_res : threading.Event() for prefetch_threads = {self.thread_res}")
         buffer.append(f"manager : multiprocessing.Manager() object = {self.manager}")
         buffer.append(f"team_dict : Shared dictionary for tracking dangerous submissions = {self.team_dict}")
+        buffer.append(f"running_dict : Shared dictionary for tracking submissions running on different workers = {self.running_dict}")
         buffer.append("\n")
         return "\n".join(buffer)
 
@@ -311,13 +313,13 @@ if __name__ == "__main__":
         fetch_ip=BACKEND_INTERNAL_IP,
         fetch_port=9000,
         fetch_route="get-jobs",
-        num_workers=1,
+        num_workers=4,
         global_queue_thread=True,
         global_prefetch_thread=True,
         prefetch_threads=4,
         prefetch_factor=4,
-        threshold=30,
-        num_backends=1
+        threshold=10,
+        num_backends=8
     )
 
     print(executor)
@@ -333,5 +335,5 @@ if __name__ == "__main__":
     backend_docker_output_dir: str = f"/output"
     backend_memswapiness: int = 0
 
-    executor.execute(worker_fn, args=(executor.team_dict, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
+    executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
     signal.pause()

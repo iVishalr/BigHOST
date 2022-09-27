@@ -179,6 +179,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
                 doc['blacklisted']['status'] = teamBlacklisted
 
+                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
+
             else:
                 # Has given outuput, need to check if it is corect
                 # preprocess the output files to match answer key if output follows certain conditions

@@ -70,9 +70,9 @@ def createApp():
                 timeout = 30
         elif "A2" in assignment_id:
             if "T1" in assignment_id:
-                timeout = 30
+                timeout = 60
             elif "T2" in assignment_id:
-                timeout = 300
+                timeout = 360
         elif "A3" in assignment_id:
             if "T1" in assignment_id:
                 timeout = 30
