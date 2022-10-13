@@ -18,3 +18,6 @@ windows:
   - executor:
       - sleep 15
       - python3 -m job_tracker.executor
+  - close:
+      - sleep 12
+      - python3 -m flask_backend.close_evaluator
