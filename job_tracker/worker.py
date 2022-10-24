@@ -242,9 +242,9 @@ def worker_fn(
                     output_queue.enqueue(serialized_job_message)
                     continue
 
-                # check if task cannot be run parallely. (Example T2 cannot be run parallely.) In that case if a submission
+                # check if task cannot be run parallely. (Example A2T2 cannot be run parallely.) In that case if a submission
                 # is being executed in some other worker, then we should not execute the current submission and must be added back to queue
-                if "T2" in job["assignment_id"]:
+                if "A2T2" in job["assignment_id"]:
                     if running_dict[key]:
                         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Preempted | Job with ID : {key} was preempted as a previous job with same ID is still being processed.")
                         serialized_job = pickle.dumps(job)
@@ -270,9 +270,11 @@ def worker_fn(
                 r.close()
 
             except requests.exceptions.Timeout:
-                kill_url = f"http://{docker_ip}:{port_list[2]}/kill_job"
-                kill_request = requests.get(kill_url)
-                kill_status = kill_request.status_code
+                if job["assignment_id"] != "A3T2":
+                    # A3T2 does not use YARN to run jobs. Hence we cannot kill using YARN. 
+                    kill_url = f"http://{docker_ip}:{port_list[2]}/kill_job"
+                    kill_request = requests.get(kill_url)
+                    kill_status = kill_request.status_code
                 res = {}
                 res['team_id'] = job['team_id']
                 res['assignment_id'] = job['assignment_id']

@@ -6,7 +6,7 @@ ENV KAFKA_HOME /usr/local/kafka
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
 RUN apt update && apt install -y ssh rsync vim openjdk-8-jdk openssh-server openssh-client wget htop python3-pip wormhole scala
-RUN pip install flask requests gdown
+RUN pip install flask requests gdown pyspark==3.2.2 kafka-python==2.0.2
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.2.2/hadoop-3.2.2.tar.gz \
     && tar -xzf hadoop-3.2.2.tar.gz \
@@ -38,7 +38,7 @@ ADD hadoop_config/*xml ${HADOOP_HOME}/etc/hadoop/
 ADD hadoop_config/ssh_config /root/.ssh/config
 ADD hadoop_config/start-hadoop.sh start-hadoop.sh
 ADD hadoop_config/restart-hadoop.sh restart-hadoop.sh
-ADD hadoop_server-A2.py hadoop_server.py
+ADD hadoop_server-A3.py hadoop_server.py
 
 RUN chown root:root /root/.ssh/config
 RUN chmod 644 /root/.ssh/config
@@ -55,9 +55,6 @@ ADD kafka_config/*.service /etc/systemd/system/
 RUN chown -R root:root /etc/systemd/system/kafka.service \
     && chown -R root:root /etc/systemd/system/zookeeper.service
 
-# RUN systemctl start zookeeper \
-#     && systemctl start kafka
-
 RUN wget https://archive.apache.org/dist/spark/spark-3.2.2/spark-3.2.2-bin-hadoop3.2.tgz \
     && tar -xvzf spark-3.2.2-bin-hadoop3.2.tgz \
     && mv spark-3.2.2-bin-hadoop3.2 ${SPARK_HOME} \
@@ -68,6 +65,10 @@ RUN chmod +x ${SPARK_HOME}/sbin/*.sh \
     && chmod +x ${SPARK_HOME}/bin/pyspark \
     && chmod +x ${SPARK_HOME}/bin/spark-shell \
     && chmod +x ${SPARK_HOME}/bin/spark-submit
+
+ADD spark_config/*.properties ${SPARK_HOME}/conf/
+ENV HADOOP_CONF_DIR ${HADOOP_HOME}/etc/hadoop
+ENV YARN_CONF_DIR ${HADOOP_HOME}/etc/hadoop
 
 RUN gdown --id 1OZHGglsceA8ZGH5uWI9dkLHU2NI4ytQO
 RUN gdown --id 1x8I8fneLQhYtR-r0rqjDYQSGMkalip2G

@@ -9,7 +9,7 @@ import requests
 import threading
 import pickle
 from time import sleep
-from typing import List
+from typing import Dict, List
 from smtp import mail_queue
 from datetime import datetime, timedelta
 
@@ -84,6 +84,15 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 preprocessed_output = "".join(preprocessed_output)
                 output_file.write(preprocessed_output)
                 output_file.close()
+
+    def preprocess_A3_output(teamId, assignmentId, output_path, key_path):
+        if not os.path.exists(output_path):
+            return False
+        
+        answer_key: Dict = json.loads(key_path)
+        output: Dict = json.loads(output_path)
+
+        return answer_key == output
 
     def thread_fn(rank, event: threading.Event):
         interval = 0.05
@@ -164,6 +173,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                     if os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
                         with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
                             error_logs = f.read()
+
                 mail_data = {}
                 mail_data['teamId'] = teamId
                 mail_data['submissionId'] = str(submissionId)
@@ -184,18 +194,28 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             else:
                 # Has given outuput, need to check if it is corect
                 # preprocess the output files to match answer key if output follows certain conditions
+                output = None
+
                 if "A1" in assignmentId:
                     preprocess_A1_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"))
-                
+
+                    if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
+                        output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
+
                 elif "A2" in assignmentId:
                     convergence_limit = 0.05
                     preprocess_A2_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), convergence_limit=convergence_limit)
 
-                if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
-                    output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
-                else:
-                    output = None
+                    if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
+                        output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
 
+                elif "A3" in assignmentId:
+                    if "T2" in assignmentId:
+                        output = preprocess_A3_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "output.json"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "output.json"))
+                    else:
+                        if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
+                            output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
+                
                 doc = submissions.find_one({'teamId': teamId})
                 
                 if output:
