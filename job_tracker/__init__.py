@@ -1,7 +1,7 @@
 import os
 import docker
 import time
-from .job import Job
+from job_tracker.job import MRJob, SparkJob, KafkaJob
 from dotenv import load_dotenv 
 from pymongo import MongoClient
 from redis import Redis, ConnectionPool

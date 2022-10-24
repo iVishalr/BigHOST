@@ -2,7 +2,7 @@ import os
 import json
 import pickle
 from pymongo import MongoClient
-from job_tracker.job import Job
+from job_tracker.job import MRJob, SparkJob, KafkaJob
 from flask import Flask, request, jsonify
 from output_processor import queue as output_queue
 from job_tracker import queue, submissions_rr, submissions_ec
@@ -36,15 +36,38 @@ def submit_job():
         SUBMISSION_ID = submission['submissionId']
         TIMEOUT = float(submission["timeout"])
         # TASK = submission["task"]
-        MAPPER = submission["mapper"]
-        REDUCER = submission["reducer"] 
-
-        job = Job(  team_id = TEAM_ID,
+        
+        if "A3" not in ASSIGNMENT_ID:
+            MAPPER = submission["mapper"]
+            REDUCER = submission["reducer"] 
+            job = MRJob(  
+                    team_id = TEAM_ID,
                     assignment_id = ASSIGNMENT_ID,
                     timeout = TIMEOUT,
                     submission_id = SUBMISSION_ID,
                     mapper = MAPPER,
                     reducer = REDUCER,
+                )
+        else:
+            if "T1" in ASSIGNMENT_ID:
+                SPARK = submission["spark"]
+                job = SparkJob(
+                    team_id = TEAM_ID,
+                    assignment_id = ASSIGNMENT_ID,
+                    timeout = TIMEOUT,
+                    submission_id = SUBMISSION_ID,
+                    spark = SPARK
+                )
+            elif "T2" in ASSIGNMENT_ID:
+                PRODUCER = submission["producer"]
+                CONSUMER = submission["consumer"]
+                job = KafkaJob(
+                    team_id = TEAM_ID,
+                    assignment_id = ASSIGNMENT_ID,
+                    timeout = TIMEOUT,
+                    submission_id = SUBMISSION_ID,
+                    producer = PRODUCER,
+                    consumer = CONSUMER
                 )
 
         data = job.__dict__
