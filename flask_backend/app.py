@@ -319,7 +319,7 @@ def createApp():
                 consumer.write(consumer_data)
                 consumer.close()                
 
-        process = subprocess.Popen([f'pylint --disable=I,R,C,W {os.path.join(os.getcwd(), "compile-test/")}'], shell=True, stdout=subprocess.PIPE, text=True)
+        process = subprocess.Popen([f'pylint --disable=R,C,W,import-error {os.path.join(os.getcwd(), "compile-test/")}'], shell=True, stdout=subprocess.PIPE, text=True)
         exit_code = process.wait()
 
         output = process.communicate()[0]

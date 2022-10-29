@@ -313,13 +313,13 @@ if __name__ == "__main__":
         fetch_ip=BACKEND_INTERNAL_IP,
         fetch_port=9000,
         fetch_route="get-jobs",
-        num_workers=4,
+        num_workers=1,
         global_queue_thread=True,
         global_prefetch_thread=True,
         prefetch_threads=4,
         prefetch_factor=4,
         threshold=10,
-        num_backends=8
+        num_backends=1
     )
 
     print(executor)
@@ -329,8 +329,8 @@ if __name__ == "__main__":
     docker_route = "run_job"
     docker_image = "hadoop-3.2.2:0.1"
 
-    backend_cpu_limit: int = 3
-    backend_mem_limit: str = "12000m"
+    backend_cpu_limit: int = 6
+    backend_mem_limit: str = "8000m"
     backend_host_output_dir: str = f"{os.path.join(os.getcwd(),'output')}"
     backend_docker_output_dir: str = f"/output"
     backend_memswapiness: int = 0

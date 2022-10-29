@@ -79,6 +79,8 @@ RUN mv page_embeddings.json /A2/
 RUN mv w /A2/
 RUN mv adjacency_list.txt /A2/
 
+ADD A3 /A3
+
 # add new ports here
 EXPOSE 8088 50070 50075 50030 50060 9870 10000 19888
 # RUN swapoff -a

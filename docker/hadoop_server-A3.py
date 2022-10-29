@@ -31,7 +31,7 @@ SUBMISSIONS = "submissions"
 
 JOBHISTORY_URL = "http://localhost:19888/ws/v1/history/mapreduce/jobs"
 
-TASK_OUTPUT_PATH = {"A3T1":"task-1-output", "A3T2":"task-2-output"}
+TASK_OUTPUT_PATH = {"A3T1":"task-1-output", "A3T2":"task-2-output", "A2T1":"task-1-output", "A2T2":"task-2-output"}
 
 FILEPATH = os.path.join(os.getcwd(), 'output')
 
@@ -208,6 +208,15 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
     st = os.stat(os.path.join(task_path,"spark.py"))
     os.chmod(os.path.join(task_path,"spark.py"), st.st_mode | stat.S_IEXEC)
 
+    res = create_hdfs_directory(f"/{team_id}")
+    if res != 0:
+        print(f"Failed to create HDFS Directory : hdfs:/{team_id}")
+
+    directory = f"/{team_id}/{assignment_id}"
+    res = create_hdfs_directory(directory)
+    if res != 0:
+        print(f"Failed to create HDFS Directory : hdfs:{directory}")
+
     task_path = os.path.join(path, submission_id)
 
     timestamp = str(time.time())
@@ -221,7 +230,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
     if assignment_id == "A3T1":
         logger.mark(f"Spawning Spark Process")
         
-        spark_job = f'''{SPARK} --name={job_name} --master=yarn --deploy-mode=cluster "/{os.path.join(task_path,'spark.py')}" "/A3/spark-input.csv" "/{os.path.join(task_path,'spark-output')}"'''
+        spark_job = f'''{SPARK} --name={job_name} --master=yarn --deploy-mode=cluster /{os.path.join(task_path,'spark.py')} /A3/T1/spark-input.csv /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
         
         spark_process = subprocess.Popen([
             spark_job
@@ -240,7 +249,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
             flag = False
         else:
             current_job = data[0]
-            current_job_state = current_job["state"]
+            current_job_state = current_job["finalStatus"]
             application_id = current_job["id"]
         
         if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
@@ -252,12 +261,12 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
             job_output = "Good Job!"
             status = current_job["state"]
 
-            if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-*")):
-                os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-*"))
+            if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
+                os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
                 # os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
-            
-            process = subprocess.Popen([f"cp -R /{os.join(task_path, 'spark-output', 'part-*')} /{os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
-            _ = process.wait()
+
+            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-* {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+            process_code = process.wait()
 
             process = subprocess.Popen([f"mv /{os.path.join(FILEPATH, team_id, assignment_id, 'part-*')} /{os.path.join(FILEPATH, team_id, assignment_id, 'part-00000')}"], shell=True, text=True)
             _ = process.wait()
@@ -362,41 +371,85 @@ def run_kafka_job(team_id, assignment_id, submission_id, timeout, producer:str, 
         if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "output.json")):
                 os.remove(os.path.join(FILEPATH, team_id, assignment_id, "output.json"))
         
-        consumer_cmd = f'''python3 /{os.path.join(task_path, "consumer.py")} agriculture > /{os.path.join(FILEPATH, team_id, assignment_id, "output.json")}'''
-        producer_cmd = f'''cat /A3/dataset.csv | python3 /{os.path.join(task_path, "producer.py")} agriculture'''
+        consumer_cmd = f'''python3 /{os.path.join(task_path, "consumer.py")} "agriculture" > /{os.path.join(FILEPATH, team_id, assignment_id, "output.json")}'''
+        producer_cmd = f'''cat /A3/T2/kafka-input.csv | python3 /{os.path.join(task_path, "producer.py")} "agriculture"'''
         
+        print("Starting Consumer Process")
         consumer_process = subprocess.Popen([
             consumer_cmd
         ], shell=True, text=True, preexec_fn=os.setsid, stdout=subprocess.PIPE)
 
+        time.sleep(5)
+
+        print("Starting Producer Process")
         producer_process = subprocess.Popen([
             producer_cmd
         ], shell=True, text=True, preexec_fn=os.setsid, stdout=subprocess.PIPE)
 
-        kafka_process_code1 = producer_process.wait(timeout=timeout)
-        kafka_process_code2 = consumer_process.wait(timeout=timeout)
+        flag = True
 
-        if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "output.json")):
-            if os.stat(os.path.join(FILEPATH, team_id, assignment_id, "output.json")).st_size == 0 or (kafka_process_code1 != 0 or kafka_process_code2 != 0):
-                logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
-                msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed."
-                status = "FAILED"
-                job_output = "Failed! Your submission might have thrown error(s). Logs have been mailed to you."
-
-                error_logs = [
+        error_logs = [
                     f"Submission ID : {submission_id}",
                     f"Team ID : {team_id}",
                     f"Assignment ID : {assignment_id}",
                     "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n",
                 ]
 
-                error_logs.append(
-                    "producer\n--------\n\n"+producer_process.communicate()[1]
-                )
+        consumer_stderr = consumer_process.communicate()[1]
+        if consumer_stderr:
+            error_logs.append(
+                    "consumer\n--------\n\n"+consumer_stderr
+            )
+            consumer_process.kill()
 
-                error_logs.append(
-                    "consumer\n--------\n\n"+consumer_process.communicate()[1]
-                )
+        try:
+            kafka_process_code2 = consumer_process.wait(timeout=(timeout-10)//2)
+            print("Consumer Completed!")
+        except subprocess.TimeoutExpired:
+            logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed. Time Limit Exceeded in Consumer."
+            status = "FAILED"
+            job_output = "Failed! Time Limit Exceeded in Consumer."
+            flag = False
+
+        producer_stderr = producer_process.communicate()[1]
+        if producer_stderr:
+            error_logs.append(
+                    "producer\n--------\n\n"+producer_stderr
+            )
+            producer_process.kill()
+
+        try:
+            kafka_process_code1 = producer_process.wait(timeout=(timeout-10)//2)
+            print("Producer Completed!")
+        except subprocess.TimeoutExpired:
+            logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed. Time Limit Exceeded in Producer."
+            status = "FAILED"
+            job_output = "Failed! Time Limit Exceeded in Producer."
+            flag = False
+
+        if flag and os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "output.json")):
+            if os.stat(os.path.join(FILEPATH, team_id, assignment_id, "output.json")).st_size == 0 or (kafka_process_code1 != 0 or kafka_process_code2 != 0):
+                logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
+                msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed."
+                status = "FAILED"
+                job_output = "Failed! Your submission might have thrown error(s). Logs have been mailed to you."
+
+                # error_logs = [
+                #     f"Submission ID : {submission_id}",
+                #     f"Team ID : {team_id}",
+                #     f"Assignment ID : {assignment_id}",
+                #     "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n",
+                # ]
+
+                # error_logs.append(
+                #     "producer\n--------\n\n"+producer_process.communicate()[1]
+                # )
+
+                # error_logs.append(
+                #     "consumer\n--------\n\n"+consumer_process.communicate()[1]
+                # )
 
                 with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
                     f.write(error_logs)
@@ -800,10 +853,16 @@ def initialize_environment(add_dataset=True) -> Tuple:
         _ = create_hdfs_directory("/A2")
         _ = create_hdfs_directory("/A2/input")
 
+        _ = create_hdfs_directory("/A3")
+        _ = create_hdfs_directory("/A3/T1")
+
         p = subprocess.Popen([f"{HDFS} dfs -put /A2/graph.txt /A2/input"], shell=True, text=True)
         _ = p.wait()
 
         p = subprocess.Popen([f"{HDFS} dfs -put /A2/adjacency_list.txt /A2/input"], shell=True, text=True)
+        _ = p.wait()
+
+        p = subprocess.Popen([f"{HDFS} dfs -put /A3/T1/spark-input.csv /A3/T1/"], shell=True, text=True)
         _ = p.wait()
     
     return 0, error_logs 

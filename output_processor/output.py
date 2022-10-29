@@ -88,9 +88,19 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     def preprocess_A3_output(teamId, assignmentId, output_path, key_path):
         if not os.path.exists(output_path):
             return False
-        
-        answer_key: Dict = json.loads(key_path)
-        output: Dict = json.loads(output_path)
+
+        with open(key_path) as f:
+            answer_key = f.read()
+
+        with open(output_path) as f:
+            output = f.read()
+
+        answer_key: Dict = json.loads(answer_key)
+
+        try:
+            output: Dict = json.loads(output)
+        except:
+            return False
 
         return answer_key == output
 
