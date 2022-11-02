@@ -156,6 +156,12 @@ def createApp():
                 if construct not in self.errors:
                     self.errors[construct] = []
             self.num_errors = 0
+
+        def reset(self):
+            self.num_errors = 0
+
+            for k in self.errors:
+                self.errors[k] = []
         
         def craft_error(self, message: str, line_number: int, col_offset: int, **kwargs):
             error_message = {}
@@ -317,7 +323,32 @@ def createApp():
 
                 consumer = open(f'compile-test/{consumer_name}', 'w')
                 consumer.write(consumer_data)
-                consumer.close()                
+                consumer.close()
+
+                ast_parser = SanityCheckerASTVisitor(["open"])
+                producer_code = ast.parse(producer_data)
+                ast_parser.visit(producer_code)
+                parser_report = None
+                if ast_parser.num_errors != 0:
+                    # we have errors in the submitted code
+                    parser_report = ast_parser.report()
+                    print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Failed Sanity Check. It appears that you have used an illegal python construct(s) in Producer. Error Log : \n{parser_report}")
+                    update_submission(marks=-1, message="Failed Sanity Check. It appears that you have used illegal python construct(s) in Producer. Error Log : \n"+parser_report, data=data, send_mail=True)
+                    res = {"msg": "Error", "len": len(queue)}
+                    return jsonify(res)   
+
+                ast_parser.reset()
+
+                consumer_code = ast.parse(consumer_data) 
+                ast_parser.visit(consumer_code)
+                parser_report = None
+                if ast_parser.num_errors != 0:
+                    # we have errors in the submitted code
+                    parser_report = ast_parser.report()
+                    print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Failed Sanity Check. It appears that you have used an illegal python construct(s) in Consumer. Error Log : \n{parser_report}")
+                    update_submission(marks=-1, message="Failed Sanity Check. It appears that you have used illegal python construct(s) in Consumer. Error Log : \n"+parser_report, data=data, send_mail=True)
+                    res = {"msg": "Error", "len": len(queue)}
+                    return jsonify(res)
 
         process = subprocess.Popen([f'pylint --disable=R,C,W,import-error {os.path.join(os.getcwd(), "compile-test/")}'], shell=True, stdout=subprocess.PIPE, text=True)
         exit_code = process.wait()

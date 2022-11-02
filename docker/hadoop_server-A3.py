@@ -230,7 +230,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
     if assignment_id == "A3T1":
         logger.mark(f"Spawning Spark Process")
         
-        spark_job = f'''{SPARK} --name={job_name} --master=yarn --deploy-mode=cluster /{os.path.join(task_path,'spark.py')} /A3/T1/spark-input.csv /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+        spark_job = f'''{SPARK} --name={job_name} --master=yarn --deploy-mode=cluster --conf spark.yarn.maxAppAttempts=1 /{os.path.join(task_path,'spark.py')} /A3/T1/spark-input.csv /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
         
         spark_process = subprocess.Popen([
             spark_job
@@ -240,7 +240,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
 
         r = requests.get("http://localhost:8088/ws/v1/cluster/apps")
         data = json.loads(r.text)
-        print(data)
+
         data = data["apps"]["app"]
 
         flag = True
@@ -248,9 +248,11 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
         if len(data) == 0:
             flag = False
         else:
-            current_job = data[0]
+            current_job = data[-1]
+            
             current_job_state = current_job["finalStatus"]
             application_id = current_job["id"]
+            print(f"Application ID : {application_id} Status : {current_job_state}")
         
         if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
             os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
@@ -259,7 +261,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Spark Job Completed Successfully")
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Spark Job Completed Successfully!"
             job_output = "Good Job!"
-            status = current_job["state"]
+            status = current_job_state
 
             if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
                 os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
@@ -281,6 +283,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
             containers_logs = []
             for folders in os.listdir(log_path):
                 containers_logs.append(os.path.join(log_path, folders, "stderr"))
+                containers_logs.append(os.path.join(log_path, folders, "stdout"))
 
             error_logs = [
                 f"Submission ID : {submission_id}",
@@ -303,7 +306,7 @@ def run_spark_job(team_id, assignment_id, submission_id, timeout, spark:str):
 
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Spark Job Failed")
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Spark Job Failed."
-            status = current_job["state"]
+            status = "FAILED"
             job_output = "Failed! Your submission might have thrown error(s). Logs have been mailed to you."
 
     res = cleanup(team_id, assignment_id, submission_id)
@@ -377,87 +380,92 @@ def run_kafka_job(team_id, assignment_id, submission_id, timeout, producer:str, 
         print("Starting Consumer Process")
         consumer_process = subprocess.Popen([
             consumer_cmd
-        ], shell=True, text=True, preexec_fn=os.setsid, stdout=subprocess.PIPE)
+        ], shell=True, text=True, preexec_fn=os.setsid, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         time.sleep(5)
 
         print("Starting Producer Process")
         producer_process = subprocess.Popen([
             producer_cmd
-        ], shell=True, text=True, preexec_fn=os.setsid, stdout=subprocess.PIPE)
+        ], shell=True, text=True, preexec_fn=os.setsid, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         flag = True
 
-        error_logs = [
-                    f"Submission ID : {submission_id}",
-                    f"Team ID : {team_id}",
-                    f"Assignment ID : {assignment_id}",
-                    "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n",
-                ]
+        return_code_producer = job_timer(producer_process, timeout=(timeout-10)//2)
+        if return_code_producer == -1:
+            print("Killing Producer Process")
+            logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed. Time Limit Exceeded in Producer."
+            status = "FAILED"
+            job_output = "Failed! Time Limits Exceeded in Producer."
+            flag = False
+        else:    
+            print("Producer Completed!")
 
-        consumer_stderr = consumer_process.communicate()[1]
-        if consumer_stderr:
-            error_logs.append(
-                    "consumer\n--------\n\n"+consumer_stderr
-            )
-            consumer_process.kill()
+        return_code_consumer = job_timer(consumer_process, timeout=(timeout-10)//2)
 
-        try:
-            kafka_process_code2 = consumer_process.wait(timeout=(timeout-10)//2)
-            print("Consumer Completed!")
-        except subprocess.TimeoutExpired:
+        if return_code_consumer == -1:
+            print("Killing Consumer Process")
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
             msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed. Time Limit Exceeded in Consumer."
             status = "FAILED"
-            job_output = "Failed! Time Limit Exceeded in Consumer."
+            job_output = "Failed! Time Limits Exceeded in Consumer."
             flag = False
+        else:
+            print("Consumer Completed!")
 
         producer_stderr = producer_process.communicate()[1]
+        consumer_stderr = consumer_process.communicate()[1]
+
+        error_logs = [
+                f"Submission ID : {submission_id}",
+                f"Team ID : {team_id}",
+                f"Assignment ID : {assignment_id}",
+                "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n",
+            ]
+
         if producer_stderr:
             error_logs.append(
                     "producer\n--------\n\n"+producer_stderr
             )
-            producer_process.kill()
 
-        try:
-            kafka_process_code1 = producer_process.wait(timeout=(timeout-10)//2)
-            print("Producer Completed!")
-        except subprocess.TimeoutExpired:
+        if consumer_stderr:
+            error_logs.append(
+                "consumer\n--------\n\n"+consumer_stderr
+            )
+
+        if return_code_consumer == -1 and return_code_producer == -1:
+            # if both processes goto infinite loop or both throw error
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
-            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed. Time Limit Exceeded in Producer."
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed."
             status = "FAILED"
-            job_output = "Failed! Time Limit Exceeded in Producer."
-            flag = False
+            job_output = "Failed! Submission killed! Your submission might have thrown error(s) or exceeded time limits. Logs have been mailed to you."
+            
+            with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
+                f.write("\n".join(error_logs))
 
-        if flag and os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "output.json")):
-            if os.stat(os.path.join(FILEPATH, team_id, assignment_id, "output.json")).st_size == 0 or (kafka_process_code1 != 0 or kafka_process_code2 != 0):
-                logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
-                msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed."
-                status = "FAILED"
-                job_output = "Failed! Your submission might have thrown error(s). Logs have been mailed to you."
+        elif len(error_logs) > 4:
+            # if any process produced bytes in stderr
+            logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed."
+            status = "FAILED"
+            job_output = "Failed! Your submission might have thrown error(s). Logs have been mailed to you."
 
-                # error_logs = [
-                #     f"Submission ID : {submission_id}",
-                #     f"Team ID : {team_id}",
-                #     f"Assignment ID : {assignment_id}",
-                #     "Note : If you do not see any error with respect to your code and you only see : \n\nlog4j:WARN\n\nThen that means your code had infinite loop and submission was killed.\n\nLOGS :- \n\n",
-                # ]
+            with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
+                f.write("\n".join(error_logs))
 
-                # error_logs.append(
-                #     "producer\n--------\n\n"+producer_process.communicate()[1]
-                # )
+        elif flag and os.stat(os.path.join(FILEPATH, team_id, assignment_id, "output.json")).st_size == 0:
+            logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed")
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Failed."
+            status = "FAILED"
+            job_output = "Failed! Your submission failed to produce any outputs."
 
-                # error_logs.append(
-                #     "consumer\n--------\n\n"+consumer_process.communicate()[1]
-                # )
+        else:
+            logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Completed Successfully")
+            msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Completed Successfully!"
+            job_output = "Good Job!"
+            status = "SUCCEEDED"
 
-                with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
-                    f.write(error_logs)
-
-            else:
-                logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Completed Successfully")
-                msg = f"Team ID : {team_id} Assignment ID : {assignment_id} Kafka Job Completed Successfully!"
-                job_output = "Good Job!"
 
     res = cleanup(team_id, assignment_id, submission_id)
 
@@ -720,10 +728,10 @@ def job_timer(proc: subprocess.Popen, timeout: int) -> int:
     while True:
         process_result = proc.poll()
         if process_result is not None:
-            return process_result
+            return 0
         if time.time() >= end:
             os.killpg(os.getpgid(proc.pid), signal.SIGINT)
-            break
+            return -1
             # raise RuntimeError("Process Timed Out")
         time.sleep(interval)
 
