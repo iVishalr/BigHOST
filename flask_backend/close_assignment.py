@@ -32,11 +32,11 @@ evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
 os.environ['TZ'] = 'Asia/Kolkata'
 time.tzset()
 
-CURRENT_ASSIGNMENT = 'A2'
+CURRENT_ASSIGNMENT = 'A3'
 ASSIGNMENT_OPEN = False
-ASSIGNMENT_CLOSE_MESSAGE = "A2 Completed"
+ASSIGNMENT_CLOSE_MESSAGE = "Portal will open on 10th Nov, 2022."
 
-sleep_until = 'Sat Oct 01 23:59:10 2022' # String format might be locale dependent.
+sleep_until = 'Sat Nov 05 23:59:10 2022' # String format might be locale dependent.
 
 def get_datetime() -> str:
     now = datetime.now()
@@ -75,3 +75,15 @@ doc['assignmentClosedMessage'] = ASSIGNMENT_CLOSE_MESSAGE
 doc = assignment_ec.find_one_and_update({'assignmentId': CURRENT_ASSIGNMENT}, {'$set': {'assignmentOpen': doc['assignmentOpen'], 'assignmentClosedMessage': doc['assignmentClosedMessage']}})
 
 print(f"[{get_datetime()}]\tAssignment : {CURRENT_ASSIGNMENT} Closed.")
+
+PORTAL_SHUTDOWN_TIME = 'Sun Nov 06 00:30:00 2022'
+
+print("Sleeping until {}...".format(PORTAL_SHUTDOWN_TIME))
+print(time.mktime(time.strptime(PORTAL_SHUTDOWN_TIME)) - time.time())
+
+if time.mktime(time.strptime(PORTAL_SHUTDOWN_TIME)) - time.time() >= 0:
+    time.sleep(time.mktime(time.strptime(PORTAL_SHUTDOWN_TIME)) - time.time())
+
+print(f"[{get_datetime()}]\tPortal Shutting Down")
+
+os.system("sudo shutdown")

@@ -319,21 +319,21 @@ def worker_fn(
             if res['status'] != "FAILED":
                 team_dict[key] -= 1
                 running_dict[key] = 0
-                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
             else:
                 running_dict[key] = 0
                 if "Container Crashed" in res['job_output']:
                     if team_dict[key] <= blacklist_threshold:
-                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
                     else:
                         end_time =  datetime.now() + timedelta(minutes=blacklist_duration)
                         blacklist_queue.put((end_time, {'team_id': job["team_id"], 'assignment_id': job["assignment_id"]}))
                         res['blacklisted'] = True
                         res['end_time'] = end_time
-                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
                 else:
                     team_dict[key] -= 1
-                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
+                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
             
             serialized_job_message = pickle.dumps(res)
             output_queue.enqueue(serialized_job_message)

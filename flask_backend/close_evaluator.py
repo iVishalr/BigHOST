@@ -32,11 +32,11 @@ evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
 os.environ['TZ'] = 'Asia/Kolkata'
 time.tzset()
 
-CURRENT_ASSIGNMENT = 'A2'
-ASSIGNMENT_OPEN = False
-ASSIGNMENT_CLOSE_MESSAGE = "Portal will open at 10 AM IST"
+# CURRENT_ASSIGNMENT = 'A3'
+# ASSIGNMENT_OPEN = False
+# ASSIGNMENT_CLOSE_MESSAGE = "Portal will open on 10th Nov, 2022 at 10 AM IST"
 
-sleep_until = 'Sat Oct 01 09:03:00 2022' # String format might be locale dependent.
+# sleep_until = 'Sun Nov 06 00:30:00 2022' # String format might be locale dependent.
 
 def get_datetime() -> str:
     now = datetime.now()
@@ -56,7 +56,7 @@ f = open(f'./close_portal_logs.txt', 'a+')
 backup = sys.stdout
 sys.stdout = Tee(sys.stdout, f)
 
-PORTAL_SHUTDOWN_TIME = 'Sun Oct 02 00:30:00 2022'
+PORTAL_SHUTDOWN_TIME = 'Sun Nov 06 00:30:00 2022'
 
 print("Sleeping until {}...".format(PORTAL_SHUTDOWN_TIME))
 print(time.mktime(time.strptime(PORTAL_SHUTDOWN_TIME)) - time.time())

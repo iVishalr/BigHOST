@@ -6,7 +6,7 @@ ENV KAFKA_HOME /usr/local/kafka
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
 RUN apt update && apt install -y ssh rsync vim openjdk-8-jdk openssh-server openssh-client wget htop python3-pip wormhole scala
-RUN pip install flask requests gdown pyspark==3.2.2 kafka-python==2.0.2
+RUN pip install flask requests gdown pyspark==3.2.2 kafka-python==2.0.2 findspark
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.2.2/hadoop-3.2.2.tar.gz \
     && tar -xzf hadoop-3.2.2.tar.gz \
