@@ -1,3 +1,4 @@
+*.tar.gz
 *logs.txt
 compile-test/
 output/

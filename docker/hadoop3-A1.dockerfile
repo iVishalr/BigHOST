@@ -6,9 +6,10 @@ ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 RUN apt update && apt install -y ssh rsync vim openjdk-8-jdk openssh-server openssh-client wget htop python3-pip wormhole
 RUN pip install flask requests gdown
 
-RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.2.2/hadoop-3.2.2.tar.gz \
-    && tar -xzf hadoop-3.2.2.tar.gz \
-    && mv hadoop-3.2.2 ${HADOOP_HOME} \
+COPY hadoop-3.2.2.tar.gz /home/root/hadoop-3.2.2.tar.gz
+
+RUN tar -xzf /home/root/hadoop-3.2.2.tar.gz -C /home/root/ \
+    && mv /home/root/hadoop-3.2.2 ${HADOOP_HOME} \
     && echo "export JAVA_HOME=$JAVA_HOME" >> ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh \
     && echo "PATH=$PATH:$HADOOP_HOME/bin" >> ~/.bashrc
 
@@ -16,7 +17,6 @@ RUN ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa \
     && cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys \
     && chmod 0600 ~/.ssh/authorized_keys
 
-RUN mkdir /home/root
 RUN mkdir /home/root/tmpdata
 RUN mkdir /home/root/dfsdata  \
     && mkdir /home/root/dfsdata/namenode  \

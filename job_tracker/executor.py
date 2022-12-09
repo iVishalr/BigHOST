@@ -308,32 +308,41 @@ class ExecutorContext:
             self.local_cleanup()   
 
 if __name__ == "__main__":
-    
+
+    config_path = os.path.join(os.getcwd(),"config", "evaluator.json")
+
+    configs = None
+    with open(config_path, "r") as f:
+        configs = json.loads(f.read())
+
+    executor_config = configs["executor"]
+    docker_config = configs["docker"]
+
     executor = ExecutorContext(
         fetch_ip=BACKEND_INTERNAL_IP,
-        fetch_port=9000,
-        fetch_route="get-jobs",
-        num_workers=4,
-        global_queue_thread=True,
-        global_prefetch_thread=True,
-        prefetch_threads=4,
-        prefetch_factor=4,
-        threshold=10,
-        num_backends=8
+        fetch_port=executor_config["fetch_port"],
+        fetch_route=executor_config["fetch_route"],
+        num_workers=executor_config["num_workers"],
+        global_queue_thread=executor_config["global_queue_thread"],
+        global_prefetch_thread=executor_config["global_prefetch_thread"],
+        prefetch_threads=executor_config["prefetch_threads"],
+        prefetch_factor=executor_config["prefetch_factor"],
+        threshold=executor_config["threshold"],
+        num_backends=executor_config["num_backends"]
     )
 
     print(executor)
 
-    docker_ip = "localhost"
-    docker_port = 10000
-    docker_route = "run_job"
-    docker_image = "hadoop-3.2.2:0.1"
+    docker_ip = docker_config["docker_ip"]
+    docker_port = docker_config["docker_port"]
+    docker_route = docker_config["docker_route"]
+    docker_image = docker_config["docker_image"]
 
-    backend_cpu_limit: int = 3
-    backend_mem_limit: str = "12000m"
-    backend_host_output_dir: str = f"{os.path.join(os.getcwd(),'output')}"
-    backend_docker_output_dir: str = f"/output"
-    backend_memswapiness: int = 0
+    backend_cpu_limit: int = docker_config["cpu_limit"]
+    backend_mem_limit: str = docker_config["memory_limit"]
+    backend_host_output_dir: str = docker_config["shared_output_dir"]
+    backend_docker_output_dir: str = docker_config["docker_output_dir"]
+    backend_memswapiness: int = docker_config["docker_memswapiness"]
 
     executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
     signal.pause()

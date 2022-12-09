@@ -8,9 +8,10 @@ ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 RUN apt update && apt install -y ssh rsync vim openjdk-8-jdk openssh-server openssh-client wget htop python3-pip wormhole scala
 RUN pip install flask requests gdown pyspark==3.2.2 kafka-python==2.0.2 findspark
 
-RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-3.2.2/hadoop-3.2.2.tar.gz \
-    && tar -xzf hadoop-3.2.2.tar.gz \
-    && mv hadoop-3.2.2 ${HADOOP_HOME} \
+COPY hadoop-3.2.2.tar.gz /home/root/hadoop-3.2.2.tar.gz
+
+RUN tar -xzf /home/root/hadoop-3.2.2.tar.gz -C /home/root/ \
+    && mv /home/root/hadoop-3.2.2 ${HADOOP_HOME} \
     && echo "export JAVA_HOME=$JAVA_HOME" >> ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh \
     && echo "PATH=$PATH:$HADOOP_HOME/bin" >> ~/.bashrc
 
