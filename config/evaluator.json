@@ -1,0 +1,25 @@
+{
+	"executor": {
+		"num_backends": 2,
+		"num_workers": 1,
+		"fetch_port": 9000,
+		"fetch_route": "get-jobs",
+		"prefetch_factor": 4,
+		"prefetch_threads": 4,
+		"threshold": 10,
+		"global_queue_thread": true,
+		"global_prefetch_thread": true
+	},
+
+	"docker": {
+		"docker_ip": "localhost",
+		"docker_port": 10000,
+		"docker_route": "run_job",
+		"docker_image": "hadoop-3.2.2:0.1",
+		"cpu_limit": 3,
+		"memory_limit": "6000m",
+		"shared_output_dir": "/home/vishalr/Desktop/backend-2022/output/",
+		"docker_output_dir": "/output",
+		"docker_memswapiness": 0
+	}
+}

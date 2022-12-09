@@ -9,7 +9,8 @@ output/
 # w
 # w1
 sample*
-*.json
+answer/*
+# *.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
