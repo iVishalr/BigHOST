@@ -12,6 +12,3 @@ windows:
   - mailer:
       - sleep 12
       - python3 -m smtp.mailer
-  - close:
-      - sleep 12
-      - python3 -m flask_backend.close_assignment

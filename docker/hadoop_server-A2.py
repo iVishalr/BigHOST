@@ -217,6 +217,11 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
     if res != 0:
         print(f"Failed to create HDFS Directory : hdfs:{directory}")
 
+    directory = f"/{team_id}/{assignment_id}/{submission_id}"
+    res = create_hdfs_directory(directory)
+    if res != 0:
+        print(f"Failed to create HDFS Directory : hdfs:{directory}")
+
     task_path = os.path.join(path, submission_id)
 
     timestamp = str(time.time())
@@ -229,7 +234,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
 
     if assignment_id == "A2T1":
         logger.mark(f"Spawning Hadoop Process")
-        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'w')}'" -input /A2/input/graph.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+        mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "/{os.path.join(task_path,'mapper.py')}" -reducer "'/{os.path.join(task_path,'reducer.py')}' '/{os.path.join(task_path,'w')}'" -input /A2/input/graph.txt -output /{team_id}/{assignment_id}/{submission_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
         mapred_process = subprocess.Popen([
             mapred_job
         ], shell=True, text=True, preexec_fn=os.setsid)
@@ -245,8 +250,8 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             jobs = jobs["job"]
             current_job = jobs[-1]
         
-        if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
-            os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+        if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, submission_id)):
+            os.makedirs(os.path.join(FILEPATH, team_id, assignment_id, submission_id))
 
         if flag and current_job["state"] == "SUCCEEDED":
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Completed Successfully")
@@ -254,11 +259,11 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             job_output = "Good Job!"
             status = current_job["state"]
 
-            if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
-                os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
+            if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, submission_id, "part-*")):
+                os.remove(os.path.join(FILEPATH, team_id, assignment_id, submission_id, "part-*"))
                 # os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
                 
-            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-00000 {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+            process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{submission_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-00000 {os.path.join(FILEPATH, team_id, assignment_id, submission_id)}"], shell=True, text=True)
             process_code = process.wait()
 
         elif flag and current_job["state"] == "FAILED":
@@ -288,7 +293,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             
             error_logs = "\n".join(error_logs)
             
-            with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
+            with open(os.path.join(FILEPATH, team_id, assignment_id, submission_id, "error.txt"), "w+") as f:
                 f.write(error_logs)
 
             logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed")
@@ -311,9 +316,9 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
         while not CONVERGED:
             logger.mark(f"Spawning Hadoop Process It - {it}")
 
-            _ = delete_hdfs_directories(f"/{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}")
+            _ = delete_hdfs_directories(f"/{team_id}/{assignment_id}/{submission_id}/{TASK_OUTPUT_PATH[assignment_id]}")
 
-            mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "'/{os.path.join(task_path,'mapper.py')}' '/{os.path.join(task_path,'w')}' '/A2/page_embeddings.json'" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A2/input/adjacency_list.txt -output /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
+            mapred_job = f'''{HADOOP} jar {PATH_TO_STREAMING} -D mapreduce.map.maxattempts=1 -D mapreduce.reduce.maxattempts=1 -D mapreduce.job.name="{job_name}" -D mapreduce.task.timeout={int(timeout*1000)} -mapper "'/{os.path.join(task_path,'mapper.py')}' '/{os.path.join(task_path,'w')}' '/A2/page_embeddings.json'" -reducer "/{os.path.join(task_path,'reducer.py')}" -input /A2/input/adjacency_list.txt -output /{team_id}/{assignment_id}/{submission_id}/{TASK_OUTPUT_PATH[assignment_id]}'''
             mapred_process = subprocess.Popen([
                 mapred_job
             ], shell=True, text=True, preexec_fn=os.setsid)
@@ -331,28 +336,28 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             
             if flag and current_job["state"] == "SUCCEEDED":
 
-                if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
-                    os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+                if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, submission_id)):
+                    os.makedirs(os.path.join(FILEPATH, team_id, assignment_id, submission_id))
                     # permission_process = subprocess.Popen([f"chmod -R 777 {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
                     # _ = permission_process.wait()
                 
-                if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, "part-00000")):
-                    os.remove(os.path.join(FILEPATH, team_id, assignment_id, "part-00000"))
+                if os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, submission_id, "part-00000")):
+                    os.remove(os.path.join(FILEPATH, team_id, assignment_id, submission_id, "part-00000"))
                     # os.remove(os.path.join(FILEPATH, team_id, assignment_id, "_SUCCESS"))
                 
-                process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-00000 {os.path.join(FILEPATH, team_id, assignment_id)}"], shell=True, text=True)
+                process = subprocess.Popen([f"{HDFS} dfs -get /{team_id}/{assignment_id}/{submission_id}/{TASK_OUTPUT_PATH[assignment_id]}/part-00000 {os.path.join(FILEPATH, team_id, assignment_id, submission_id)}"], shell=True, text=True)
                 process_code = process.wait()
 
                 process = subprocess.Popen([f"touch /{os.path.join(task_path,'w1')}"], shell=True, text=True)
                 process_code = process.wait()
 
-                process = subprocess.Popen([f"cp -r {os.path.join(FILEPATH, team_id, assignment_id, 'part-00000')} /{os.path.join(task_path,'w1')}"], shell=True, text=True)
+                process = subprocess.Popen([f"cp -r {os.path.join(FILEPATH, team_id, assignment_id, submission_id, 'part-00000')} /{os.path.join(task_path,'w1')}"], shell=True, text=True)
                 process_code = process.wait()
 
                 CONVERGED = check_convergence(
                     w_file_path = os.path.join(task_path,'w'),
                     w1_file_path = os.path.join(task_path,'w1'),
-                    iteration_log_path = os.path.join(FILEPATH, team_id, assignment_id, 'log.txt'),
+                    iteration_log_path = os.path.join(FILEPATH, team_id, assignment_id, submission_id,'log.txt'),
                     convergence_limit = convergence_limit,
                     iter = it
                 ) # this renames W1 to W and deletes W1
@@ -361,8 +366,8 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
             
             elif flag and current_job["state"] == "FAILED":
                 
-                if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id)):
-                    os.makedirs(os.path.join(FILEPATH, team_id, assignment_id))
+                if not os.path.exists(os.path.join(FILEPATH, team_id, assignment_id, submission_id)):
+                    os.makedirs(os.path.join(FILEPATH, team_id, assignment_id, submission_id))
 
                 application_id = current_job["id"]
                 application_id = application_id.split("_")[1:]
@@ -390,7 +395,7 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
                 
                 error_logs = "\n".join(error_logs)
                 
-                with open(os.path.join(FILEPATH, team_id, assignment_id, "error.txt"), "w+") as f:
+                with open(os.path.join(FILEPATH, team_id, assignment_id, submission_id, "error.txt"), "w+") as f:
                     f.write(error_logs)
 
                 logger.mark(f"Team ID : {team_id} Assignment ID : {assignment_id} Hadoop Job Failed")
@@ -468,7 +473,8 @@ def cleanup(team_id, assign_id, task) -> int:
 
     task_path = TASK_OUTPUT_PATH[assign_id]
 
-    _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task_path}")
+    _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task}/{task_path}")
+    _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task}")
     _ = delete_hdfs_directories(f"/{team_id}/{assign_id}")
     _ = delete_hdfs_directories(f"/{team_id}")
 

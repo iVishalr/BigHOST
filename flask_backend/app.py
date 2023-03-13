@@ -121,7 +121,7 @@ def createApp():
                         "mapper": data["mapper"],
                         "reducer": data["reducer"]
                     },
-                "timestamp": int(str(time.time_ns())[:10]),
+                "timestamp": int(str(time.time_ns())[:13]),
                 "marks": marks,
                 "message": message
                 }
@@ -378,6 +378,12 @@ def createApp():
     @app.route('/get-jobs', methods=['GET'])
     @cross_origin()
     def get_jobs():
+        client_addr = None
+        if request.environ.get('HTTP_X_FORWARDED_FOR') is None:
+            client_addr = request.environ['REMOTE_ADDR']
+        else:
+            client_addr = request.environ['HTTP_X_FORWARDED_FOR'] # if behind a proxy
+        
         prefetch_factor = int(request.args.get("prefetch_factor"))
 
         if prefetch_factor is None: prefetch_factor = 1
@@ -402,7 +408,7 @@ def createApp():
         length = len(data)
         data = json.dumps(data)
 
-        request_url = f"http://{evaluator_internal_ip}:10001/submit-job"
+        request_url = f"http://{client_addr}:10001/submit-job"
 
         r = requests.post(request_url, data=data)
         res = r.text

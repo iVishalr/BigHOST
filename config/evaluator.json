@@ -1,12 +1,12 @@
 {
 	"executor": {
 		"num_backends": 2,
-		"num_workers": 1,
+		"num_workers": 2,
 		"fetch_port": 9000,
 		"fetch_route": "get-jobs",
-		"prefetch_factor": 4,
-		"prefetch_threads": 4,
-		"threshold": 10,
+		"prefetch_factor": 8,
+		"prefetch_threads": 2,
+		"threshold": 8,
 		"global_queue_thread": true,
 		"global_prefetch_thread": true
 	},
@@ -16,9 +16,9 @@
 		"docker_port": 10000,
 		"docker_route": "run_job",
 		"docker_image": "hadoop-3.2.2:0.1",
-		"cpu_limit": 3,
-		"memory_limit": "6000m",
-		"shared_output_dir": "/home/vishalr/Desktop/backend-2022/output/",
+		"cpu_limit": 2,
+		"memory_limit": "8000m",
+		"shared_output_dir": "/home/vishalramesh01/backend-2022/output/",
 		"docker_output_dir": "/output",
 		"docker_memswapiness": 0
 	}

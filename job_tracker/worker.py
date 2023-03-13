@@ -8,6 +8,7 @@ import socket
 import requests
 import threading
 import subprocess
+import multiprocessing
 
 from time import sleep
 from smtp import mail_queue
@@ -21,6 +22,7 @@ def worker_fn(
     worker_rank: int,
     team_dict: dict,
     running_dict: dict,
+    worker_lock,
     docker_ip: str, 
     docker_port: int, 
     docker_route: str,
@@ -82,23 +84,29 @@ def worker_fn(
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             return s.getsockname()[1]
 
-    def start_container(rank: int, image: str, cpu_limit: int, memory_limit: str, mem_swappiness: int, host_output_dir: str, docker_output_dir: str ):
+    def start_container(rank: int, image: str, cpu_limit: int, memory_limit: str, mem_swappiness: int, host_output_dir: str, docker_output_dir: str):
+        worker_lock.acquire()
         rm_port = find_free_port()
         dn_port = find_free_port()
         hadoop_port = find_free_port()
         jobhis_port = find_free_port()
+        worker_lock.release()
 
+        number_of_cores = num_threads * cpu_limit
+        cpu_set = f"{1 + ((worker_rank-1) * number_of_cores) + (rank-1)*cpu_limit}-{1 + ((worker_rank-1) * number_of_cores) + (rank*cpu_limit) - 1}"
+        print(cpu_set)
         docker_container = docker_client.containers.run(
             image=image, 
-            auto_remove=False,
+            auto_remove=True,
             detach=True,
             name=f"hadoop-c{worker_rank}{rank}",
-            cpu_period=int(cpu_limit)*100000,
+            # cpu_period=int(cpu_limit)*100000,
+            cpuset_cpus=cpu_set,
             mem_limit=str(memory_limit),
             mem_swappiness=mem_swappiness,
-            restart_policy={
-                "Name": "on-failure", "MaximumRetryCount": 5
-            },
+            # restart_policy={
+            #     "Name": "on-failure", "MaximumRetryCount": 5
+            # },
             volumes={
                 f'{host_output_dir}': {'bind': docker_output_dir, 'mode': 'rw'},
             },
@@ -119,7 +127,7 @@ def worker_fn(
         return request_url, docker_container, [rm_port, dn_port, hadoop_port, jobhis_port]
 
 
-    def blacklist_thread_fn(blacklist_queue: PriorityQueue[Dict] , event: threading.Event):
+    def blacklist_thread_fn(blacklist_queue: PriorityQueue[Dict], event: threading.Event):
         interval = 0.05
         sleep(60)
         print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tStarting.")
@@ -242,16 +250,6 @@ def worker_fn(
                     output_queue.enqueue(serialized_job_message)
                     continue
 
-                # check if task cannot be run parallely. (Example A2T2 cannot be run parallely.) In that case if a submission
-                # is being executed in some other worker, then we should not execute the current submission and must be added back to queue
-                if "A2T2" in job["assignment_id"]:
-                    if running_dict[key]:
-                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key} Job Preempted | Job with ID : {key} was preempted as a previous job with same ID is still being processed.")
-                        serialized_job = pickle.dumps(job)
-                        queue.enqueue(serialized_job)
-                        sleep(30)
-                        continue
-
             team_dict[key] += 1
             running_dict[key] = 1
             status_code = 500
@@ -298,9 +296,6 @@ def worker_fn(
                 else:
                     res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. Team Blacklisted!'
 
-                # docker_container.stop()
-                # docker_container.wait()
-                # docker_container.remove()
                 docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)
                 _ = docker_kill_process.wait()
 
@@ -339,10 +334,6 @@ def worker_fn(
             output_queue.enqueue(serialized_job_message)
 
         if event.is_set():
-            # docker_container.stop()
-            # docker_container.wait()
-            # docker_container.remove()
-
             docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)
             _ = docker_kill_process.wait()
 

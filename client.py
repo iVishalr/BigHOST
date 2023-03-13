@@ -11,7 +11,7 @@ from pprint import pprint
 # print(res)
 # print(r.status_code)
 
-# url = "http://35.213.133.27:9000/sanity-check"
+url = "http://35.213.133.27:9000/sanity-check"
 # url = "http://localhost:9000/sanity-check"
 
 # data = {'teamId': 'BD1_ADMIN_09', 
@@ -26,15 +26,33 @@ from pprint import pprint
 # 'reducer': f'{open("./docker/A1/task2/reducer.py").read()}', 
 # 'submissionId': time.time()}
 
+data = {'teamId': 'BD1_ADMIN_09', 
+        'assignmentId': 'A2T2', 
+        'mapper': None, 
+        'reducer': None,
+        'timeout': 300, 
+        "submissionId": None
+    }
 
+with open("./docker/A2/task2/mapper.py", "r") as f:
+    data['mapper'] = f.read()
 
-# for i in range(2):
-#     data['submissionId'] = int(str(time.time_ns())[:13])
-#     payload = json.dumps(data)
-#     r = requests.post(url, data=payload)
-#     print(f"{i+1} {r.status_code}")
-#     res = json.loads(r.text)
-#     print(res)
+with open("./docker/A2/task2/reducer.py", "r") as f:
+    data['reducer'] = f.read()
+
+# data['submissionId'] = int(str(time.time_ns())[:13])
+
+for i in range(0, 4):
+    # if i < 10:
+    #     data['teamId'] = f'BD1_ADMIN_0{i}'
+    # else:
+    #     data['teamId'] = f'BD2_ADMIN_0{i}'
+    data['submissionId'] = int(str(time.time_ns())[:13])
+    payload = json.dumps(data)
+    r = requests.post(url, data=payload)
+    print(f"{i+1} {r.status_code}")
+    res = json.loads(r.text)
+    print(res)
 
 # data = {'teamId': 'BD1_ADMIN_09', 
 # 'assignmentId': 'A1T1', 
@@ -140,19 +158,21 @@ from pprint import pprint
 #     print(res)
 #     sleep(0.1)
 
-# data = {'teamId': 'BD_019_536_571_018', 
-#         'assignmentId': 'A1T1', 
+# data = {'teamId': 'BD_ADMIN_09', 
+#         'assignmentId': 'A2T2', 
 #         'mapper': None, 
-#         'reducer': None, 
+#         'reducer': None,
 #         'timeout': 30, 
-#         "submissionId": "submissionId1"
+#         "submissionId": None
 #     }
 
-# with open("./test/m.py", "r") as f:
+# with open("./docker/A2/task2/mapper.py", "r") as f:
 #     data['mapper'] = f.read()
 
-# with open("./test/r_syntax_error.py", "r") as f:
+# with open("./docker/A2/task2/reducer.py", "r") as f:
 #     data['reducer'] = f.read()
+
+# data['submissionId'] = int(str(time.time_ns())[:13])
 
 # for i in range(5):
 #     teamId = data["teamId"]
@@ -215,9 +235,9 @@ from pprint import pprint
 # print(r.status_code)
 
 # r = requests.get("http://localhost:8088/ws/v1/cluster/apps")
-r = requests.get("http://localhost:33155/ws/v1/history/mapreduce/jobs")
-data = json.loads(r.text)
-print(data)
+# r = requests.get("http://localhost:33155/ws/v1/history/mapreduce/jobs")
+# data = json.loads(r.text)
+# print(data)
 # pprint(data["apps"]["app"], indent=3)
 
 # print(apps)

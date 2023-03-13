@@ -96,6 +96,7 @@ class ExecutorContext:
         self.team_dict : Dict[str: int] = self.manager.dict()
         self.running_dict : Dict[str: int] = self.manager.dict()
         self.blacklist_queue = self.manager.Queue()
+        self.lock = self.manager.Lock()
 
         assert num_backends % num_workers == 0, "num_backends must be completely divisible by num_workers"
 
@@ -344,5 +345,5 @@ if __name__ == "__main__":
     backend_docker_output_dir: str = docker_config["docker_output_dir"]
     backend_memswapiness: int = docker_config["docker_memswapiness"]
 
-    executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
+    executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, executor.lock, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
     signal.pause()

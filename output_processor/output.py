@@ -148,8 +148,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             teamBlacklisted = data["blacklisted"]
             end_time = data["end_time"]
 
-            FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId)
-
+            FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId, submissionId)
+            print(FILEPATH_TEAM)
             os.system(f"sudo chown -R $USER:$USER {FILEPATH}/{teamId}")
 
             if not os.path.exists(FILEPATH_TEAM):
@@ -229,12 +229,12 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 doc = submissions.find_one({'teamId': teamId})
                 
                 if output:
-                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Passed")
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Passed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
                     message = 'PASSED. Submission has passed our test cases. Good Job!'
                 else:
-                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed")
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Wrong Answer'
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'
@@ -278,5 +278,14 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     signal.signal(signal.SIGINT, signal_handler)    
 
 if __name__ == "__main__":
-    output_processor_fn(rank=1, event=threading.Event(), num_threads=1, submission_output_dir=os.path.join(os.getcwd(),"output"), answer_key_path=os.path.join(os.getcwd(), "answer"))
+    config_path = os.path.join(os.getcwd(), "config", "evaluator.json")
+
+    configs = None
+    with open(config_path, "r") as f:
+        configs = json.loads(f.read())
+
+    executor_config = configs["executor"]
+    docker_config = configs["docker"]
+
+    output_processor_fn(rank=1, event=threading.Event(), num_threads=1, submission_output_dir=docker_config["shared_output_dir"], answer_key_path=os.path.join(os.getcwd(), "answer"))
     signal.pause()
