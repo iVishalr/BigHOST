@@ -1,13 +1,13 @@
 #!/usr/bin/sudo /usr/bin/python3
-
 import os
 import sys
 import json
+import time
+import pickle
 import signal
 import filecmp
-import requests
 import threading
-import pickle
+
 from time import sleep
 from typing import Dict, List
 from smtp import mail_queue
@@ -161,12 +161,14 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             else:
                 submissions = submissions_ec
 
+            timestamp = int(str(time.time_ns())[:10])
             # If status is false, directly put 0
             if status == "FAILED":
                 doc = submissions.find_one({'teamId': teamId})
                 print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed Message : {message}")
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
+                doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
                 doc['blacklisted']['status'] = teamBlacklisted
                 
                 if teamBlacklisted:
@@ -197,8 +199,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : BLACKLISTED_BEFORE Message : {message}")
                 doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                 doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
+                doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
                 doc['blacklisted']['status'] = teamBlacklisted
-
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
 
             else:
@@ -232,11 +234,13 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Passed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
                     message = 'PASSED. Submission has passed our test cases. Good Job!'
                 else:
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Failed")
                     doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
                     doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Wrong Answer'
+                    doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'
 
                 doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})

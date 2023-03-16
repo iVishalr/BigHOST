@@ -17,6 +17,7 @@ from pymongo import MongoClient
 from flask_cors import cross_origin
 from flask import Flask, request, jsonify
 from signal import signal, SIGPIPE, SIG_DFL
+from flask_backend.parser import SanityCheckerASTVisitor
 
 signal(SIGPIPE, SIG_DFL) 
 
@@ -58,10 +59,11 @@ def createApp():
         timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
         return timestamp
     
-    def delete_files():
-        for file in os.listdir('compile-test'):
+    def delete_files(path):
+        for file in os.listdir(path):
             if file.endswith('.py'):
-                os.remove('compile-test/' + file)
+                os.remove(os.path.join(path, file))
+        os.rmdir(path)
 
     def get_timeouts(assignment_id):
         timeout = 30
@@ -93,43 +95,41 @@ def createApp():
             submissions = submissions_ec
 
         doc = submissions.find_one({'teamId': data['teamId']})
-        # if doc is None:
-        #     doc = {
-        #         'teamId': data['teamId'],
-        #         'blacklisted': {
-        #             'status': False,
-        #             'message': "",
-        #             'timestamp': str(time.time_ns)[:13],
-        #         },
-        #         'assignments': {
-        #             data['assignmentId']: {
-        #                 'submissions': {
-        #                     str(data['submissionId']): {
-        #                         'marks': marks,
-        #                         'message': message
-        #                     }
-        #                 }
-        #             }
-        #         }
-        #     }
-        #     submissions.insert_one(doc)
-        # else:
-        if str(data['submissionId']) not in doc['assignments'][data['assignmentId']]['submissions']:
-            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])] = {
-                str(data["submissionId"]): {
-                    "data": {
-                        "mapper": data["mapper"],
-                        "reducer": data["reducer"]
-                    },
-                "timestamp": int(str(time.time_ns())[:13]),
-                "marks": marks,
-                "message": message
+        
+        timestamp = int(str(time.time_ns())[:10])
+        if doc is None:
+            doc = {
+                'teamId': data['teamId'],
+                'blacklisted': {
+                    'status': False,
+                    'message': "",
+                    'timestamp': timestamp,
+                },
+                'assignments': {
+                    data['assignmentId']: {
+                        'submissions': {
+                            str(data['submissionId']): {
+                                'marks': marks,
+                                'message': message,
+                                'timestamp': timestamp
+                            }
+                        }
+                    }
                 }
+            }
+            submissions.insert_one(doc)
+
+        elif str(data['submissionId']) not in doc['assignments'][data['assignmentId']]['submissions']:
+            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])] = {
+                "marks": marks,
+                "message": message,
+                "timestamp": timestamp
             }
             doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
         else:
             doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
             doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
+            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['timestamp'] = timestamp
             doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
         
         if send_mail:
@@ -140,96 +140,6 @@ def createApp():
             mail_data['attachment'] = ""
             mail_data = pickle.dumps(mail_data)
             mail_queue.enqueue(mail_data)
-
-    # ----------- Helper Classes for AST Parsing ----------------- #
-
-    class SanityCheckerASTVisitor(ast.NodeVisitor):
-        def __init__(self, flag_constructs: List) -> None:
-            """
-            Args:
-                flag_constructs: List[str] - List of strings for which submission must be flagged.
-            """
-
-            self.errors = {}
-            self.flag_constructs = flag_constructs
-            for construct in flag_constructs:
-                if construct not in self.errors:
-                    self.errors[construct] = []
-            self.num_errors = 0
-
-        def reset(self):
-            self.num_errors = 0
-
-            for k in self.errors:
-                self.errors[k] = []
-        
-        def craft_error(self, message: str, line_number: int, col_offset: int, **kwargs):
-            error_message = {}
-
-            error_message["message"] = message
-            error_message["lineno"] = line_number
-            error_message["col_offset"] = col_offset
-
-            if kwargs is not None:
-                for key,value in kwargs.items():
-                    error_message[key] = value
-
-            self.num_errors += 1
-            return error_message
-        
-        def visit_For(self, node: ast.For):
-            if "for" in self.flag_constructs:
-                message = "For Loop Detected. No looping constructs are allowed in this assignment."
-                lineno = node.lineno
-                col_offset = node.col_offset
-                
-                error_message = self.craft_error(message, lineno, col_offset)
-                self.errors["for"].append(error_message)
-            
-            self.generic_visit(node)
-
-        def visit_While(self, node: ast.While):
-            if "while" in self.flag_constructs:
-                message = "While Loop Detected. No looping constructs are allowed in this assignment."
-                lineno = node.lineno
-                col_offset = node.col_offset
-                
-                error_message = self.craft_error(message, lineno, col_offset)
-                self.errors["while"].append(error_message)
-            
-            self.generic_visit(node)
-
-        def visit_Call(self, node: ast.Call):
-            self.generic_visit(node)
-
-        def visit_Name(self, node: ast.Name):
-            if "open" in self.flag_constructs:
-                if node.id == "open" and isinstance(node.ctx, ast.Load):
-                    message = "You are not allowed to use File operations for this assignment."
-                    lineno = node.lineno
-                    col_offset = node.col_offset
-
-                    error_message = self.craft_error(message, lineno, col_offset)
-                    self.errors["open"].append(error_message)
-                    
-            self.generic_visit(node)
-
-        def report(self) -> str:
-            report = []
-
-            for errors in self.errors:
-                msg = ""
-                line = "-" * len(errors)
-
-                if len(self.errors[errors]) != 0:
-                    msg += f"{errors}\n{line}\n"
-
-                for error_messages in self.errors[errors]:
-                    msg += f"Line: {error_messages['lineno']} Col: {error_messages['col_offset']} - {error_messages['message']}\n"
-                
-                report.append(msg)
-            
-            return "\n".join(report)
 
     @app.route('/sanity-check', methods=["POST"])
     @cross_origin()
@@ -242,9 +152,13 @@ def createApp():
         
         update_submission(marks=-1, message='Sanity Checking', data=data)
 
-        if not os.path.exists(os.path.join(os.getcwd(), "compile-test")):
-            os.makedirs(os.path.join(os.getcwd(), "compile-test"))
-        
+        compile_path = f"{os.path.join(os.getcwd(),'compile-test', str(data['submissionId']))}"
+
+        if not os.path.exists(compile_path):
+            os.makedirs(compile_path)
+
+        _ = open(os.path.join(compile_path, "__init__.py"), "w+").close()
+
         if "A3" not in data["assignmentId"]:
             mapper_data = data["mapper"]
             reducer_data = data['reducer']
@@ -263,11 +177,11 @@ def createApp():
                 res = {"msg": "Reducer shebang not present", "len": len(queue)}
                 return jsonify(res)
 
-            mapper = open(f'compile-test/{mapper_name}', 'w')
+            mapper = open(os.path.join(compile_path, mapper_name), 'w')
             mapper.write(mapper_data)
             mapper.close()
 
-            reducer = open(f'compile-test/{reducer_name}', 'w')
+            reducer = open(os.path.join(compile_path, reducer_name), 'w')
             reducer.write(reducer_data)
             reducer.close()
 
@@ -283,10 +197,6 @@ def createApp():
                     res = {"msg": "Check if file is in LF format.", "len": len(queue)}
                     return jsonify(res)
                 
-                spark_file = open(f"compile-test/{spark_file_name}", "w")
-                spark_file.write(spark_file_data)
-                spark_file.close()
-
                 ast_parser = SanityCheckerASTVisitor(["for", "while", "open"])
                 parsed_code = ast.parse(spark_file_data)
                 ast_parser.visit(parsed_code)
@@ -298,6 +208,10 @@ def createApp():
                     update_submission(marks=-1, message="Failed Sanity Check. It appears that you have used illegal python construct(s). Error Log : \n"+parser_report, data=data, send_mail=True)
                     res = {"msg": "Error", "len": len(queue)}
                     return jsonify(res)
+                
+                spark_file = open(os.path.join(compile_path, spark_file_name), "w")
+                spark_file.write(spark_file_data)
+                spark_file.close()
             
             elif "T2" in data["assignmentId"]:
                 producer_data = data["producer"]
@@ -317,25 +231,18 @@ def createApp():
                     res = {"msg": "Check if Consumer file is in LF format.", "len": len(queue)}
                     return jsonify(res)
 
-                producer = open(f'compile-test/{producer_name}', 'w')
-                producer.write(producer_data)
-                producer.close()
-
-                consumer = open(f'compile-test/{consumer_name}', 'w')
-                consumer.write(consumer_data)
-                consumer.close()
-
                 ast_parser = SanityCheckerASTVisitor(["open"])
                 producer_code = ast.parse(producer_data)
                 ast_parser.visit(producer_code)
                 parser_report = None
+                
                 if ast_parser.num_errors != 0:
                     # we have errors in the submitted code
                     parser_report = ast_parser.report()
                     print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Failed Sanity Check. It appears that you have used an illegal python construct(s) in Producer. Error Log : \n{parser_report}")
                     update_submission(marks=-1, message="Failed Sanity Check. It appears that you have used illegal python construct(s) in Producer. Error Log : \n"+parser_report, data=data, send_mail=True)
                     res = {"msg": "Error", "len": len(queue)}
-                    return jsonify(res)   
+                    return jsonify(res)  
 
                 ast_parser.reset()
 
@@ -350,17 +257,26 @@ def createApp():
                     res = {"msg": "Error", "len": len(queue)}
                     return jsonify(res)
 
-        process = subprocess.Popen([f'pylint --disable=R,C,W,import-error {os.path.join(os.getcwd(), "compile-test/")}'], shell=True, stdout=subprocess.PIPE, text=True)
+                producer = open(os.path.join(compile_path, producer_name), 'w')
+                producer.write(producer_data)
+                producer.close()
+
+                consumer = open(os.path.join(compile_path, consumer_name), 'w')
+                consumer.write(consumer_data)
+                consumer.close()
+
+        process = subprocess.Popen([f'pylint --disable=R,C,W,import-error {compile_path}/'], shell=True, stdout=subprocess.PIPE, text=True)
         exit_code = process.wait()
 
         output = process.communicate()[0]
-        delete_files()
+        delete_files(compile_path)
 
         if exit_code != 0:
             print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Failed Sanity Check. Check your files for syntax errors or illegal module imports. Error Log : {output}")
             update_submission(marks=-1, message="Failed Sanity Check. Check your files for syntax errors or illegal module imports. Error Log : "+output, data=data, send_mail=True)
             res = {"msg": "Error", "len": len(queue)}
             return jsonify(res)
+
         elif exit_code == 0:
             print(f"[{get_datetime()}] [sanity_checker]\tTeam : {data['teamId']} Assignment ID : {data['assignmentId']} Message : Passed Sanity Check.")
             update_submission(marks=-1, message='Sanity Check Passed', data=data)

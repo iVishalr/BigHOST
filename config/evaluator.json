@@ -1,14 +1,15 @@
 {
 	"executor": {
 		"num_backends": 2,
-		"num_workers": 2,
+		"num_workers": 1,
 		"fetch_port": 9000,
 		"fetch_route": "get-jobs",
-		"prefetch_factor": 8,
+		"prefetch_factor": 4,
 		"prefetch_threads": 2,
 		"threshold": 8,
 		"global_queue_thread": true,
-		"global_prefetch_thread": true
+		"global_prefetch_thread": true,
+		"timeout": 30
 	},
 
 	"docker": {
@@ -20,6 +21,7 @@
 		"memory_limit": "8000m",
 		"shared_output_dir": "/home/vishalramesh01/backend-2022/output/",
 		"docker_output_dir": "/output",
-		"docker_memswapiness": 0
+		"docker_memswapiness": 0,
+		"spawn_wait": 40
 	}
 }

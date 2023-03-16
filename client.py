@@ -4,6 +4,7 @@ import requests
 import time
 from time import sleep
 from pprint import pprint
+import random
 # import ast
 
 # r = requests.get("http://127.0.0.1:9000/empty-queue")
@@ -11,8 +12,8 @@ from pprint import pprint
 # print(res)
 # print(r.status_code)
 
-url = "http://35.213.133.27:9000/sanity-check"
-# url = "http://localhost:9000/sanity-check"
+# url = "http://35.213.133.27:9000/sanity-check"
+url = "http://localhost:9000/sanity-check"
 
 # data = {'teamId': 'BD1_ADMIN_09', 
 # 'assignmentId': 'A1T1', 
@@ -27,32 +28,33 @@ url = "http://35.213.133.27:9000/sanity-check"
 # 'submissionId': time.time()}
 
 data = {'teamId': 'BD1_ADMIN_09', 
-        'assignmentId': 'A2T2', 
+        'assignmentId': 'A2T1', 
         'mapper': None, 
         'reducer': None,
         'timeout': 300, 
         "submissionId": None
     }
 
-with open("./docker/A2/task2/mapper.py", "r") as f:
+with open("./docker/A2/task1/mapper.py", "r") as f:
     data['mapper'] = f.read()
 
-with open("./docker/A2/task2/reducer.py", "r") as f:
+with open("./docker/A2/task1/reducer.py", "r") as f:
     data['reducer'] = f.read()
 
 # data['submissionId'] = int(str(time.time_ns())[:13])
 
-for i in range(0, 4):
+for i in range(0, 64):
     # if i < 10:
     #     data['teamId'] = f'BD1_ADMIN_0{i}'
     # else:
     #     data['teamId'] = f'BD2_ADMIN_0{i}'
-    data['submissionId'] = int(str(time.time_ns())[:13])
+    data['submissionId'] = int(str(time.time_ns())[:10]) + random.randint(10,10000)
     payload = json.dumps(data)
     r = requests.post(url, data=payload)
     print(f"{i+1} {r.status_code}")
     res = json.loads(r.text)
     print(res)
+    # sleep(0.5)
 
 # data = {'teamId': 'BD1_ADMIN_09', 
 # 'assignmentId': 'A1T1', 

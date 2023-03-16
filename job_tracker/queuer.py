@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import pickle
 from pymongo import MongoClient
 from job_tracker.job import MRJob, SparkJob, KafkaJob
@@ -17,9 +18,12 @@ def updateSubmission(marks, message, data):
         submissions = submissions_rr
     else:
         submissions = submissions_ec
+
+    timestamp = int(str(time.time_ns())[:10])
     doc = submissions.find_one({'teamId': data['teamId']})
     doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
     doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
+    doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['timestamp'] = timestamp
     doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
 
 @app.route("/submit-job", methods=["POST"])
@@ -33,11 +37,10 @@ def submit_job():
 
         TEAM_ID = submission["teamId"]
         ASSIGNMENT_ID = submission["assignmentId"]
-        SUBMISSION_ID = submission['submissionId']
+        SUBMISSION_ID = submission["submissionId"]
         TIMEOUT = float(submission["timeout"])
-        # TASK = submission["task"]
         
-        if "A3" not in ASSIGNMENT_ID:
+        if "A1" in ASSIGNMENT_ID or "A2" in ASSIGNMENT_ID:
             MAPPER = submission["mapper"]
             REDUCER = submission["reducer"] 
             job = MRJob(  
@@ -48,7 +51,7 @@ def submit_job():
                     mapper = MAPPER,
                     reducer = REDUCER,
                 )
-        else:
+        elif "A3" in ASSIGNMENT_ID:
             if "T1" in ASSIGNMENT_ID:
                 SPARK = submission["spark"]
                 job = SparkJob(
@@ -69,6 +72,8 @@ def submit_job():
                     producer = PRODUCER,
                     consumer = CONSUMER
                 )
+        else:
+            continue
 
         data = job.__dict__
 
@@ -76,6 +81,7 @@ def submit_job():
         queue.enqueue(serialized_job)
 
         updateSubmission(marks=-1, message='In Queue', data=submission)
+        submission = None
 
     res = {"msg": "Queued", "len": len(queue)}
     return jsonify(res)

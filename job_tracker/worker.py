@@ -8,13 +8,12 @@ import socket
 import requests
 import threading
 import subprocess
-import multiprocessing
 
 from time import sleep
 from smtp import mail_queue
 from contextlib import closing
 from queue import PriorityQueue
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from datetime import datetime, timedelta
 from job_tracker import output_queue, submissions_rr, submissions_ec, docker_client
 
@@ -23,6 +22,7 @@ def worker_fn(
     team_dict: dict,
     running_dict: dict,
     worker_lock,
+    worker_timeout: int,
     docker_ip: str, 
     docker_port: int, 
     docker_route: str,
@@ -32,7 +32,8 @@ def worker_fn(
     mem_limit: str, 
     mem_swappiness: int,
     host_output_dir: str, 
-    container_output_dir: str
+    container_output_dir: str,
+    container_spawn_wait: int
     ):
 
     blacklist_threshold = 5
@@ -62,15 +63,24 @@ def worker_fn(
             submissions = submissions_rr
         else:
             submissions = submissions_ec
-        doc = submissions.find_one({'teamId': data['team_id']})
-        doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['marks'] = marks
-        doc['assignments'][data['assignment_id']]['submissions'][str(data['submission_id'])]['message'] = message
-        doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {'assignments': doc['assignments']}})
+
+        timestamp = int(str(time.time_ns())[:10])
+        team_id = data['team_id']
+        assignment_id = data["assignment_id"]
+        submission_id = str(data["submission_id"])
+        doc = submissions.find_one({'teamId': team_id})
+        record = {
+            "marks": marks,
+            "message": message,
+            "timestamp": timestamp
+        }
+        doc['assignments'][assignment_id]['submissions'][submission_id] = record
+        doc = submissions.find_one_and_update({'teamId': team_id}, {'$set': {'assignments': doc['assignments']}})
         
         if send_mail:
             mail_data = {}
             mail_data['teamId'] = data['team_id']
-            mail_data['submissionId'] = str(data['submission_id'])
+            mail_data['submissionId'] = submission_id
             mail_data['submissionStatus'] = message
             mail_data['attachment'] = ""
             mail_data = pickle.dumps(mail_data)
@@ -120,7 +130,7 @@ def worker_fn(
         
         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container.")
         print(docker_container.__dict__)
-        time.sleep(60)
+        time.sleep(container_spawn_wait)
 
         request_url = f"http://{docker_ip}:{hadoop_port}/{docker_route}"
 
@@ -203,8 +213,8 @@ def worker_fn(
                 timeout += 0.05
                 prev_interval = interval
                 interval += timeout
-                if interval > 60:
-                    interval = 60
+                if interval > worker_timeout:
+                    interval = worker_timeout
 
                 process_slept = 1
                 print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tSleeping Worker Process for {interval:.04f} seconds.")
@@ -366,7 +376,7 @@ def worker_fn(
         for i in threads[:-1]:
             if i.is_alive():
                 i.join()
-        threads[-1].join(60)
+        threads[-1].join(30)
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)

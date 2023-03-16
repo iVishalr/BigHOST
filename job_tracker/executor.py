@@ -57,6 +57,7 @@ class ExecutorContext:
         prefetch_factor: int = 2,
         threshold: int = 16,
         num_backends: int = 8,
+        timeout: int = 60
         ) -> None:
 
         """
@@ -81,6 +82,7 @@ class ExecutorContext:
         self.num_prefetch_threads = prefetch_threads
         self.prefetch_factor = prefetch_factor
         self.threshold = threshold
+        self.timeout = timeout
 
         self.fetch_ip = fetch_ip
         self.fetch_port = fetch_port
@@ -125,6 +127,7 @@ class ExecutorContext:
         buffer.append(f"num_workers : Number of producers reading from Job Queue = {self.num_workers}")
         buffer.append(f"num_prefetch_threads : Number of prefetch_threads to spawn for fetching submissions = {self.num_prefetch_threads}")
         buffer.append(f"threshold : Thershold for fetching next batch of submissions = {self.threshold}")
+        buffer.append(f"timeout : Timeout for queue_threads and workers = {self.timeout}")
         buffer.append(f"executor_mode : ExecutorContext running mode = {self.executor_mode}")
         buffer.append(f"executor_mode_desc : ExecutorContext Mode Description = {self.executor_mode_desc}")
         buffer.append(f"workers : Buffer for maintaining pointers to worker processes = {self.workers}")
@@ -210,7 +213,7 @@ class ExecutorContext:
         while not self.global_queue_thread.stopped():
             queue_length = len(redis_queue)
 
-            if queue_length < self.threshold * 2:
+            if queue_length < self.threshold:
 
                 self.prefetch_threads = self.spawn_prefetch_threads(target_fn=self.prefetch_fn)
                 for thread in self.prefetch_threads:
@@ -228,8 +231,8 @@ class ExecutorContext:
                         timeout += 0.5
                         queue_thread_timeout += timeout
                         
-                        if queue_thread_timeout > 60:
-                            queue_thread_timeout = 60
+                        if queue_thread_timeout > self.timeout:
+                            queue_thread_timeout = self.timeout
 
                         queue_trottled = 1
                         print(f"[{self.get_datetime()}] [queue_mt]\tIncreasing Queue Thread Timeout to {queue_thread_timeout:.04f}s.")
@@ -329,7 +332,8 @@ if __name__ == "__main__":
         prefetch_threads=executor_config["prefetch_threads"],
         prefetch_factor=executor_config["prefetch_factor"],
         threshold=executor_config["threshold"],
-        num_backends=executor_config["num_backends"]
+        num_backends=executor_config["num_backends"],
+        timeout=executor_config["timeout"]
     )
 
     print(executor)
@@ -344,6 +348,7 @@ if __name__ == "__main__":
     backend_host_output_dir: str = docker_config["shared_output_dir"]
     backend_docker_output_dir: str = docker_config["docker_output_dir"]
     backend_memswapiness: int = docker_config["docker_memswapiness"]
+    backend_spawn_wait: int = docker_config["spawn_wait"]
 
-    executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, executor.lock, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir,))
+    executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, executor.lock, executor.timeout, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir, backend_spawn_wait))
     signal.pause()
