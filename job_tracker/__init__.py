@@ -14,14 +14,6 @@ queue = RedisQueue(broker=broker, queue_name="jobqueue")
 
 load_dotenv(os.path.join(os.getcwd(), '.env'))
 
-client_rr = MongoClient(os.getenv('MONGO_URI_RR'), connect=False)
-db_rr = client_rr['bd']
-submissions_rr = db_rr['submissions']
-
-client_ec = MongoClient(os.getenv('MONGO_URI_EC'), connect=False)
-db_ec = client_ec['bd']
-submissions_ec = db_ec['submissions']
-
 docker_client = docker.from_env()
 
 BACKEND_INTERNAL_IP = os.getenv('BACKEND_INTERNAL_IP')

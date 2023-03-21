@@ -1,7 +1,4 @@
-import os
-import sys
 import ast
-
 from typing import List
 
 class SanityCheckerASTVisitor(ast.NodeVisitor):

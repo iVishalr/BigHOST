@@ -7,13 +7,11 @@ import pickle
 import requests
 import subprocess
 
-from typing import List
-from pprint import pprint
-from smtp import mail_queue
+from common.db import DataBase
+from common import mail_queue
 from datetime import datetime
 from dotenv import load_dotenv
 from flask_backend import queue
-from pymongo import MongoClient
 from flask_cors import cross_origin
 from flask import Flask, request, jsonify
 from signal import signal, SIGPIPE, SIG_DFL
@@ -24,22 +22,11 @@ signal(SIGPIPE, SIG_DFL)
 def createApp():
 
     load_dotenv(os.path.join(os.getcwd(), '.env'))
-
-    client_rr = MongoClient(os.getenv('MONGO_URI_RR'), connect=False)
-    db_rr = client_rr['bd']
-    submissions_rr = db_rr['submissions']
-
-    client_ec = MongoClient(os.getenv('MONGO_URI_EC'), connect=False)
-    db_ec = client_ec['bd']
-    submissions_ec = db_ec['submissions']
-
-    evaluator_internal_ip = os.getenv('EVALUATOR_INTERNAL_IP')
-    evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
-    
     os.environ['TZ'] = 'Asia/Kolkata'
     time.tzset()
 
     app = Flask(__name__)  
+    db = DataBase()
 
     class Tee(object):
         def __init__(self, *files):
@@ -66,7 +53,7 @@ def createApp():
         os.rmdir(path)
 
     def get_timeouts(assignment_id):
-        timeout = 30
+        timeout = None
         if "A1" in assignment_id:
             if "T1" in assignment_id:
                 timeout = 30
@@ -88,54 +75,20 @@ def createApp():
         return timeout
         
     def update_submission(marks, message, data, send_mail=False):
-        if '1' == data['teamId'][2]:
-            # check if the team is from RR campus
-            submissions = submissions_rr
-        else:
-            submissions = submissions_ec
-
-        doc = submissions.find_one({'teamId': data['teamId']})
-        
+        doc = db.try_find("submissions", data['teamId'])
         timestamp = int(str(time.time_ns())[:10])
-        if doc is None:
-            doc = {
-                'teamId': data['teamId'],
-                'blacklisted': {
-                    'status': False,
-                    'message': "",
-                    'timestamp': timestamp,
-                },
-                'assignments': {
-                    data['assignmentId']: {
-                        'submissions': {
-                            str(data['submissionId']): {
-                                'marks': marks,
-                                'message': message,
-                                'timestamp': timestamp
-                            }
-                        }
-                    }
-                }
-            }
-            submissions.insert_one(doc)
-
-        elif str(data['submissionId']) not in doc['assignments'][data['assignmentId']]['submissions']:
-            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])] = {
-                "marks": marks,
-                "message": message,
-                "timestamp": timestamp
-            }
-            doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+        teamId = data['teamId']
+        assignmentId = data['assignmentId']
+        submissionId = str(data['submissionId'])
+        if not doc:
+            db.insert("submissions", teamId, None, assignmentId, submissionId, marks, message, timestamp)
         else:
-            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
-            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
-            doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['timestamp'] = timestamp
-            doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+            db.update("submissions", teamId, None, assignmentId, submissionId, marks, message, timestamp)
         
         if send_mail:
             mail_data = {}
-            mail_data['teamId'] = data['teamId']
-            mail_data['submissionId'] = str(data['submissionId'])
+            mail_data['teamId'] = teamId
+            mail_data['submissionId'] = submissionId
             mail_data['submissionStatus'] = message
             mail_data['attachment'] = ""
             mail_data = pickle.dumps(mail_data)
@@ -157,7 +110,7 @@ def createApp():
         if not os.path.exists(compile_path):
             os.makedirs(compile_path)
 
-        _ = open(os.path.join(compile_path, "__init__.py"), "w+").close()
+        _ = open(os.path.join(compile_path, "__init__.py"), "w+").close() # required for pylint to work
 
         if "A3" not in data["assignmentId"]:
             mapper_data = data["mapper"]
@@ -327,7 +280,6 @@ def createApp():
         request_url = f"http://{client_addr}:10001/submit-job"
 
         r = requests.post(request_url, data=data)
-        res = r.text
 
         res = {"msg": f"Dequeued {length} submissions from queue.", "num_submissions": length, "len": len(queue)}
         # res = {"msg": "dequeued from submission queue", "len": len(queue), "server_response": res}

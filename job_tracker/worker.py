@@ -10,12 +10,13 @@ import threading
 import subprocess
 
 from time import sleep
-from smtp import mail_queue
+from common import mail_queue
+from common.db import DataBase
 from contextlib import closing
 from queue import PriorityQueue
 from typing import Dict, List
 from datetime import datetime, timedelta
-from job_tracker import output_queue, submissions_rr, submissions_ec, docker_client
+from job_tracker import output_queue, docker_client
 
 def worker_fn(
     worker_rank: int,
@@ -51,6 +52,7 @@ def worker_fn(
     f = open(f'./worker{worker_rank}_logs.txt', 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
+    db = DataBase()
 
     def get_datetime() -> str:
         now = datetime.now()
@@ -58,31 +60,19 @@ def worker_fn(
         return timestamp
 
     def updateSubmission(marks, message, data, send_mail=False):
-        if '1' == data['team_id'][2]:
-            # check if the team is from RR campus
-            submissions = submissions_rr
-        else:
-            submissions = submissions_ec
-
         timestamp = int(str(time.time_ns())[:10])
         team_id = data['team_id']
         assignment_id = data["assignment_id"]
         submission_id = str(data["submission_id"])
-        doc = submissions.find_one({'teamId': team_id})
-        record = {
-            "marks": marks,
-            "message": message,
-            "timestamp": timestamp
-        }
-        doc['assignments'][assignment_id]['submissions'][submission_id] = record
-        doc = submissions.find_one_and_update({'teamId': team_id}, {'$set': {'assignments': doc['assignments']}})
+        doc = db.update("submissions", team_id, None, assignment_id, submission_id, marks, message, timestamp)
         
         if send_mail:
-            mail_data = {}
-            mail_data['teamId'] = data['team_id']
-            mail_data['submissionId'] = submission_id
-            mail_data['submissionStatus'] = message
-            mail_data['attachment'] = ""
+            mail_data = {
+                'teamId': data['team_id'],
+                'submissionId': submission_id,
+                'submissionStatus': message,
+                'attachment': ""
+            }
             mail_data = pickle.dumps(mail_data)
             mail_queue.enqueue(mail_data)
 
@@ -114,9 +104,6 @@ def worker_fn(
             cpuset_cpus=cpu_set,
             mem_limit=str(memory_limit),
             mem_swappiness=mem_swappiness,
-            # restart_policy={
-            #     "Name": "on-failure", "MaximumRetryCount": 5
-            # },
             volumes={
                 f'{host_output_dir}': {'bind': docker_output_dir, 'mode': 'rw'},
             },
@@ -139,7 +126,7 @@ def worker_fn(
 
     def blacklist_thread_fn(blacklist_queue: PriorityQueue[Dict], event: threading.Event):
         interval = 0.05
-        sleep(60)
+        sleep(container_spawn_wait)
         print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tStarting.")
         while not event.is_set():
             try:
@@ -157,16 +144,8 @@ def worker_fn(
                 continue
             
             _, data = data
-
-            if '1' == data['team_id'][2]:
-                # check if the team is from RR campus
-                submissions = submissions_rr
-            else:
-                submissions = submissions_ec
-
-            doc = submissions.find_one({'teamId': data['team_id']})
-            doc['blacklisted']['status'] = False
-            doc = submissions.find_one_and_update({'teamId': data['team_id']}, {'$set': {"blacklisted":  doc['blacklisted']}})
+            timestamp = int(str(time.time_ns())[:10])
+            doc = db.unblacklist("submissions", data['team_id'], "", timestamp)
             print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tUnblacklisted Team : {data['team_id']}.")
             
             if data['team_id']+"_"+data['assignment_id'][:-2]+"T1" in team_dict:
@@ -178,8 +157,6 @@ def worker_fn(
                 running_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T1"] = 0
             if data['team_id']+"_"+data['assignment_id'][:-2]+"T2" in running_dict:
                 running_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T2"] = 0
-
-        return
 
     def thread_fn(rank, event: threading.Event):
         print(rank, 

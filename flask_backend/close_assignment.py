@@ -1,20 +1,10 @@
 import os
 import sys
-import json
 import time
-import pickle
-import requests
-import subprocess
 
-from pprint import pprint
-from smtp import mail_queue
 from datetime import datetime
 from dotenv import load_dotenv
-from flask_backend import queue
 from pymongo import MongoClient
-from flask_cors import cross_origin
-from flask import Flask, request, jsonify
-from signal import signal, SIGPIPE, SIG_DFL
 
 load_dotenv(os.path.join(os.getcwd(), '.env'))
 

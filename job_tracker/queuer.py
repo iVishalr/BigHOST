@@ -2,29 +2,21 @@ import os
 import json
 import time
 import pickle
-from pymongo import MongoClient
-from job_tracker.job import MRJob, SparkJob, KafkaJob
+
+from job_tracker import queue
+from common.db import DataBase
 from flask import Flask, request, jsonify
+from job_tracker.job import MRJob, SparkJob, KafkaJob
 from output_processor import queue as output_queue
-from job_tracker import queue, submissions_rr, submissions_ec
 
 app = Flask(__name__)
 
 PORT = 10001
+db = DataBase()
 
 def updateSubmission(marks, message, data):
-    if '1' == data['teamId'][2]:
-        # check if the team is from RR campus
-        submissions = submissions_rr
-    else:
-        submissions = submissions_ec
-
     timestamp = int(str(time.time_ns())[:10])
-    doc = submissions.find_one({'teamId': data['teamId']})
-    doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['marks'] = marks
-    doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['message'] = message
-    doc['assignments'][data['assignmentId']]['submissions'][str(data['submissionId'])]['timestamp'] = timestamp
-    doc = submissions.find_one_and_update({'teamId': data['teamId']}, {'$set': {'assignments': doc['assignments']}})
+    doc = db.update("submissions", data['teamId'], None, data['assignmentId'], str(data['submissionId']), marks, message, timestamp)
 
 @app.route("/submit-job", methods=["POST"])
 def submit_job():

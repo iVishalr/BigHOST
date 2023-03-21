@@ -43,7 +43,7 @@ with open("./docker/A2/task1/reducer.py", "r") as f:
 
 # data['submissionId'] = int(str(time.time_ns())[:13])
 
-for i in range(0, 64):
+for i in range(0, 8):
     # if i < 10:
     #     data['teamId'] = f'BD1_ADMIN_0{i}'
     # else:

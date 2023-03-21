@@ -10,8 +10,8 @@ import threading
 
 from time import sleep
 from typing import Dict, List
-from smtp import mail_queue
-from datetime import datetime, timedelta
+from common import mail_queue
+from datetime import datetime
 
 def output_processor_fn(rank: int, event: threading.Event, num_threads: int, submission_output_dir: str, answer_key_path: str):
     '''
@@ -37,8 +37,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
     sys.stdout = Tee(sys.stdout, f)
 
     from output_processor import queue, broker
-    from output_processor import submissions_rr, submissions_ec
+    from common.db import DataBase
 
+    db = DataBase()
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
 
@@ -69,7 +70,6 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 if abs(op_rank - answer_rank) <= convergence_limit:
                     preprocessed_output.append((op_page, answer_rank))
 
-            # print(preprocessed_output)
             output_file.close()
             answer_file.close()
 
@@ -155,25 +155,15 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             if not os.path.exists(FILEPATH_TEAM):
                 status = "FAILED"
 
-            if '1' == data['team_id'][2]:
-                # check if the team is from RR campus
-                submissions = submissions_rr
-            else:
-                submissions = submissions_ec
-
             timestamp = int(str(time.time_ns())[:10])
+            
             # If status is false, directly put 0
             if status == "FAILED":
-                doc = submissions.find_one({'teamId': teamId})
-                print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed Message : {message}")
-                doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
-                doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
-                doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
-                doc['blacklisted']['status'] = teamBlacklisted
-                
+                blacklisted = None
                 if teamBlacklisted:
-                    doc['blacklisted']['message'] = f"You are blocked from submitting. Come back at {end_time.strftime('%d/%m/%Y %H:%M:%S')} to submit again."
-                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
+                    blacklisted = db.gen_blacklisted_record(True, f"You are blocked from submitting. Come back at {end_time.strftime('%d/%m/%Y %H:%M:%S')} to submit again.", timestamp)
+                doc = db.update("submissions", teamId, blacklisted, assignmentId, submissionId, 0, message, timestamp)
+                print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : Failed Message : {message}")
 
                 error_logs = ""
 
@@ -194,15 +184,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
             
-            elif status == 'BLACKLISTED_BEFORE':
-                doc = submissions.find_one({'teamId': teamId})
+            elif status == 'BLACKLISTED_BEFORE': # needed if a team gets blacklisted but team's submissions still exists in queue
                 print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : BLACKLISTED_BEFORE Message : {message}")
-                doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
-                doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = message
-                doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
-                doc['blacklisted']['status'] = teamBlacklisted
-                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments'], "blacklisted":  doc['blacklisted']}})
-
+                doc = db.update("submissions", teamId, None, assignmentId, submissionId, 0, message, timestamp)
             else:
                 # Has given outuput, need to check if it is corect
                 # preprocess the output files to match answer key if output follows certain conditions
@@ -228,22 +212,14 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                         if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
                             output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
                 
-                doc = submissions.find_one({'teamId': teamId})
-                
                 if output:
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Passed")
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 1
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Passed'
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
+                    doc = db.update("submissions", teamId, None, assignmentId, submissionId, 1, 'Passed', timestamp)
                     message = 'PASSED. Submission has passed our test cases. Good Job!'
                 else:
                     print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Failed")
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['marks'] = 0
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['message'] = 'Wrong Answer'
-                    doc['assignments'][assignmentId]['submissions'][submissionId]['timestamp'] = timestamp
+                    doc = db.update("submissions", teamId, None, assignmentId, submissionId, 0, 'Wrong Answer', timestamp)
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'
-
-                doc = submissions.find_one_and_update({'teamId': teamId}, {'$set': {'assignments': doc['assignments']}})
                 
                 mail_data = {}
                 mail_data['teamId'] = teamId

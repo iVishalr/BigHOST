@@ -1,7 +1,7 @@
 import os
 import time
 import smtplib
-from smtp import dbuser_rr, dbuser_ec
+from common import dbuser_rr, dbuser_ec
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart

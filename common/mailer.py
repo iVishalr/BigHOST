@@ -7,8 +7,8 @@ from time import sleep
 from datetime import datetime
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
-from smtp.email_service import EmailingService
-from smtp import mail_broker, mail_queue, mail_user, mail_passwd
+from common.email_service import EmailingService
+from common import mail_broker, mail_queue, mail_user, mail_passwd
 
 def mailer_fn():
     '''
@@ -42,7 +42,7 @@ def mailer_fn():
 
     mailer = EmailingService()
 
-    from smtp import mail_server
+    from common import mail_server
 
     while not event.is_set():
 
