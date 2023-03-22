@@ -7,9 +7,10 @@ import pickle
 import requests
 import subprocess
 
-from common.db import DataBase
 from common import mail_queue
-from datetime import datetime
+from common.db import DataBase
+from common.utils import Tee, get_datetime
+
 from dotenv import load_dotenv
 from flask_backend import queue
 from flask_cors import cross_origin
@@ -28,23 +29,9 @@ def createApp():
     app = Flask(__name__)  
     db = DataBase()
 
-    class Tee(object):
-        def __init__(self, *files):
-            self.files = files
-        def write(self, obj):
-            for f in self.files:
-                f.write(obj)
-        def flush(self):
-            pass
-
     f = open(f'./sanity_checker_logs.txt', 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
-
-    def get_datetime() -> str:
-        now = datetime.now()
-        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
-        return timestamp
     
     def delete_files(path):
         for file in os.listdir(path):
@@ -86,11 +73,12 @@ def createApp():
             db.update("submissions", teamId, None, assignmentId, submissionId, marks, message, timestamp)
         
         if send_mail:
-            mail_data = {}
-            mail_data['teamId'] = teamId
-            mail_data['submissionId'] = submissionId
-            mail_data['submissionStatus'] = message
-            mail_data['attachment'] = ""
+            mail_data = {
+                'teamId': teamId,
+                'submissionId': submissionId,
+                'submissionStatus': message,
+                'attachment': ""
+            }
             mail_data = pickle.dumps(mail_data)
             mail_queue.enqueue(mail_data)
 

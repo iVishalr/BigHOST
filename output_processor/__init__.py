@@ -1,7 +1,7 @@
 import os
 import time
 from redis import Redis, ConnectionPool
-from queues.redisqueue import RedisQueue
+from common.redisqueue import RedisQueue
 
 os.environ['TZ'] = 'Asia/Kolkata'
 time.tzset()

@@ -9,100 +9,26 @@ import filecmp
 import threading
 
 from time import sleep
-from typing import Dict, List
+from typing import List
+from .preprocess import *
 from common import mail_queue
-from datetime import datetime
+from common.utils import Tee, get_datetime
 
-def output_processor_fn(rank: int, event: threading.Event, num_threads: int, submission_output_dir: str, answer_key_path: str):
+def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_timeout: int, submission_output_dir: str, answer_key_path: str):
     '''
     Takes a submissions output and compares to the expected output
     '''
-
-    class Tee(object):
-        def __init__(self, *files):
-            self.files = files
-        def write(self, obj):
-            for f in self.files:
-                f.write(obj)
-        def flush(self):
-            pass
-
-    def get_datetime() -> str:  
-        now = datetime.now()
-        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
-        return timestamp
 
     f = open(f'./output_processor_logs.txt', 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
 
-    from output_processor import queue, broker
     from common.db import DataBase
+    from output_processor import queue, broker
 
     db = DataBase()
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
-
-    def preprocess_A1_output(teamId, assignmentId, output_path, key_path):
-        pass
-
-    def preprocess_A2_output(teamId, assignmentId, output_path, key_path, convergence_limit):
-        if assignmentId == "A2T1":
-            pass
-
-        elif assignmentId == "A2T2":
-            preprocessed_output = []
-            output_file = open(output_path,"r")
-            answer_file = open(key_path, "r")
-            flag = True
-
-            for output_line, answer_line in zip(output_file, answer_file):
-                op_page, op_rank = output_line.strip().split(",")
-                answer_page, answer_rank = answer_line.strip().split(",")
-
-                if op_page != answer_page:
-                    flag = False
-                    break
-
-                op_rank = float(op_rank)
-                answer_rank = float(answer_rank)
-
-                if abs(op_rank - answer_rank) <= convergence_limit:
-                    preprocessed_output.append((op_page, answer_rank))
-
-            output_file.close()
-            answer_file.close()
-
-            if not flag:
-                preprocessed_output = []
-            else:
-                for i in range(len(preprocessed_output)):
-                    page, rank = preprocessed_output[i]
-                    preprocessed_output[i] = f"{page},{rank:.2f}\n"
-
-                output_file = open(output_path, "w")
-                preprocessed_output = "".join(preprocessed_output)
-                output_file.write(preprocessed_output)
-                output_file.close()
-
-    def preprocess_A3_output(teamId, assignmentId, output_path, key_path):
-        if not os.path.exists(output_path):
-            return False
-
-        with open(key_path) as f:
-            answer_key = f.read()
-
-        with open(output_path) as f:
-            output = f.read()
-
-        answer_key: Dict = json.loads(answer_key)
-
-        try:
-            output: Dict = json.loads(output)
-        except:
-            return False
-
-        return answer_key == output
 
     def thread_fn(rank, event: threading.Event):
         interval = 0.05
@@ -114,8 +40,8 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                 timeout += 0.05
                 interval += timeout
                 
-                if interval > 60:
-                    interval = 60
+                if interval > op_timeout:
+                    interval = op_timeout
 
                 process_slept = 1
                 print(f"[{get_datetime()}] [output_processor] [thread {rank}]\tSleeping Output Processor for {interval:.04f} seconds.")
@@ -144,9 +70,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             assignmentId = data['assignment_id']
             status = data['status']
             submissionId = str(data['submission_id'])
-            message = data["job_output"]
-            teamBlacklisted = data["blacklisted"]
-            end_time = data["end_time"]
+            message = data['job_output']
+            teamBlacklisted = data['blacklisted']
+            end_time = data['end_time']
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId, submissionId)
             print(FILEPATH_TEAM)
@@ -176,11 +102,12 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                         with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
                             error_logs = f.read()
 
-                mail_data = {}
-                mail_data['teamId'] = teamId
-                mail_data['submissionId'] = str(submissionId)
-                mail_data['submissionStatus'] = message
-                mail_data['attachment'] = error_logs
+                mail_data = {
+                    'teamId': teamId,
+                    'submissionId': str(submissionId),
+                    'submissionStatus': message,
+                    'attachment': error_logs
+                }
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
             
@@ -221,11 +148,12 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
                     doc = db.update("submissions", teamId, None, assignmentId, submissionId, 0, 'Wrong Answer', timestamp)
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'
                 
-                mail_data = {}
-                mail_data['teamId'] = teamId
-                mail_data['submissionId'] = str(submissionId)
-                mail_data['submissionStatus'] = message
-                mail_data['attachment'] = ""
+                mail_data = {
+                    'teamId': teamId,
+                    'submissionId': str(submissionId),
+                    'submissionStatus': message,
+                    'attachment': ""
+                }
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
 
@@ -251,7 +179,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, sub
             i.join()
         for i in threads:
             if i.is_alive():
-                i.join()
+                i.join(30)
         broker.close()
         sys.exit(0)
     
@@ -267,5 +195,12 @@ if __name__ == "__main__":
     executor_config = configs["executor"]
     docker_config = configs["docker"]
 
-    output_processor_fn(rank=1, event=threading.Event(), num_threads=1, submission_output_dir=docker_config["shared_output_dir"], answer_key_path=os.path.join(os.getcwd(), "answer"))
+    output_processor_fn(
+        rank=1, 
+        event=threading.Event(), 
+        num_threads=1,
+        op_timeout=executor_config["timeout"],
+        submission_output_dir=docker_config["shared_output_dir"], 
+        answer_key_path=os.path.join(os.getcwd(), "answer")
+    )
     signal.pause()

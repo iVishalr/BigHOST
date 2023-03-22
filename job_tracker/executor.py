@@ -13,17 +13,8 @@ from output_processor import output
 from .worker import worker_fn
 from datetime import datetime
 
-from job_tracker import broker, queue as redis_queue, BACKEND_INTERNAL_IP, BACKEND_EXTERNAL_IP
-
-
-class Tee(object):
-    def __init__(self, *files):
-        self.files = files
-    def write(self, obj):
-        for f in self.files:
-            f.write(obj)
-    def flush(self):
-        pass
+from job_tracker import broker, queue as redis_queue, BACKEND_INTERNAL_IP
+from common.utils import Tee
 
 f = open('./logs.txt', 'w+')
 backup = sys.stdout
@@ -345,10 +336,30 @@ if __name__ == "__main__":
 
     backend_cpu_limit: int = docker_config["cpu_limit"]
     backend_mem_limit: str = docker_config["memory_limit"]
+    backend_cpu_taskset: bool = docker_config["taskset"]
     backend_host_output_dir: str = docker_config["shared_output_dir"]
     backend_docker_output_dir: str = docker_config["docker_output_dir"]
     backend_memswapiness: int = docker_config["docker_memswapiness"]
     backend_spawn_wait: int = docker_config["spawn_wait"]
 
-    executor.execute(worker_fn, args=(executor.team_dict, executor.running_dict, executor.lock, executor.timeout, docker_ip, docker_port, docker_route, docker_image, executor.num_threads, backend_cpu_limit, backend_mem_limit, backend_memswapiness, backend_host_output_dir, backend_docker_output_dir, backend_spawn_wait))
+    executor.execute(
+        worker_fn, args=(
+            executor.team_dict, 
+            executor.running_dict, 
+            executor.lock, 
+            executor.timeout, 
+            docker_ip, 
+            docker_port, 
+            docker_route, 
+            docker_image, 
+            executor.num_threads,
+            backend_cpu_limit, 
+            backend_mem_limit,
+            backend_cpu_taskset,
+            backend_memswapiness, 
+            backend_host_output_dir, 
+            backend_docker_output_dir, 
+            backend_spawn_wait
+            )
+        )
     signal.pause()

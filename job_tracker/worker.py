@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 import json
@@ -10,54 +9,44 @@ import threading
 import subprocess
 
 from time import sleep
+from typing import Dict, List
+
 from common import mail_queue
 from common.db import DataBase
+from common.utils import Tee, get_datetime
+
 from contextlib import closing
 from queue import PriorityQueue
-from typing import Dict, List
 from datetime import datetime, timedelta
 from job_tracker import output_queue, docker_client
 
 def worker_fn(
-    worker_rank: int,
-    team_dict: dict,
-    running_dict: dict,
-    worker_lock,
-    worker_timeout: int,
-    docker_ip: str, 
-    docker_port: int, 
-    docker_route: str,
-    docker_image: str, 
-    num_threads: int, 
-    cpu_limit: int, 
-    mem_limit: str, 
-    mem_swappiness: int,
-    host_output_dir: str, 
-    container_output_dir: str,
-    container_spawn_wait: int
+        worker_rank: int,
+        team_dict: dict,
+        running_dict: dict,
+        worker_lock,
+        worker_timeout: int,
+        docker_ip: str, 
+        docker_port: int, 
+        docker_route: str,
+        docker_image: str, 
+        num_threads: int, 
+        cpu_limit: int, 
+        mem_limit: str,
+        taskset: bool, 
+        mem_swappiness: int,
+        host_output_dir: str, 
+        container_output_dir: str,
+        container_spawn_wait: int
     ):
 
     blacklist_threshold = 5
     blacklist_duration = 120 # in minutes
 
-    class Tee(object):
-        def __init__(self, *files):
-            self.files = files
-        def write(self, obj):
-            for f in self.files:
-                f.write(obj)
-        def flush(self):
-            pass
-
     f = open(f'./worker{worker_rank}_logs.txt', 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
     db = DataBase()
-
-    def get_datetime() -> str:
-        now = datetime.now()
-        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
-        return timestamp
 
     def updateSubmission(marks, message, data, send_mail=False):
         timestamp = int(str(time.time_ns())[:10])
@@ -84,7 +73,7 @@ def worker_fn(
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             return s.getsockname()[1]
 
-    def start_container(rank: int, image: str, cpu_limit: int, memory_limit: str, mem_swappiness: int, host_output_dir: str, docker_output_dir: str):
+    def start_container(rank: int, image: str, cpu_limit: int, memory_limit: str, taskset: bool, mem_swappiness: int, host_output_dir: str, docker_output_dir: str):
         worker_lock.acquire()
         rm_port = find_free_port()
         dn_port = find_free_port()
@@ -92,37 +81,54 @@ def worker_fn(
         jobhis_port = find_free_port()
         worker_lock.release()
 
-        number_of_cores = num_threads * cpu_limit
-        cpu_set = f"{1 + ((worker_rank-1) * number_of_cores) + (rank-1)*cpu_limit}-{1 + ((worker_rank-1) * number_of_cores) + (rank*cpu_limit) - 1}"
-        print(cpu_set)
-        docker_container = docker_client.containers.run(
-            image=image, 
-            auto_remove=True,
-            detach=True,
-            name=f"hadoop-c{worker_rank}{rank}",
-            # cpu_period=int(cpu_limit)*100000,
-            cpuset_cpus=cpu_set,
-            mem_limit=str(memory_limit),
-            mem_swappiness=mem_swappiness,
-            volumes={
-                f'{host_output_dir}': {'bind': docker_output_dir, 'mode': 'rw'},
-            },
-            ports={
-                '8088/tcp': rm_port,
-                '9870/tcp': dn_port,
-                f'{docker_port}/tcp': hadoop_port,
-                '19888/tcp': jobhis_port,
-            },
-        )
+        if taskset:
+            number_of_cores = num_threads * cpu_limit
+            cpu_set = f"{0 + ((worker_rank-1) * number_of_cores) + (rank-1)*cpu_limit}-{0 + ((worker_rank-1) * number_of_cores) + (rank*cpu_limit) - 1}"
+            print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tSetting processor affinity = {cpu_set} for container hadoop-c{worker_rank}{rank}.")
+            docker_container = docker_client.containers.run(
+                image=image, 
+                auto_remove=True,
+                detach=True,
+                name=f"hadoop-c{worker_rank}{rank}",
+                cpuset_cpus=cpu_set,
+                mem_limit=str(memory_limit),
+                mem_swappiness=mem_swappiness,
+                volumes={
+                    f'{host_output_dir}': {'bind': docker_output_dir, 'mode': 'rw'},
+                },
+                ports={
+                    '8088/tcp': rm_port,
+                    '9870/tcp': dn_port,
+                    f'{docker_port}/tcp': hadoop_port,
+                    '19888/tcp': jobhis_port,
+                },
+            )
+        else:
+            docker_container = docker_client.containers.run(
+                image=image, 
+                auto_remove=True,
+                detach=True,
+                name=f"hadoop-c{worker_rank}{rank}",
+                cpu_period=int(cpu_limit)*100000,
+                mem_limit=str(memory_limit),
+                mem_swappiness=mem_swappiness,
+                volumes={
+                    f'{host_output_dir}': {'bind': docker_output_dir, 'mode': 'rw'},
+                },
+                ports={
+                    '8088/tcp': rm_port,
+                    '9870/tcp': dn_port,
+                    f'{docker_port}/tcp': hadoop_port,
+                    '19888/tcp': jobhis_port,
+                },
+            )
         
         print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\tStarting docker container.")
-        print(docker_container.__dict__)
         time.sleep(container_spawn_wait)
 
         request_url = f"http://{docker_ip}:{hadoop_port}/{docker_route}"
 
         return request_url, docker_container, [rm_port, dn_port, hadoop_port, jobhis_port]
-
 
     def blacklist_thread_fn(blacklist_queue: PriorityQueue[Dict], event: threading.Event):
         interval = 0.05
@@ -146,32 +152,30 @@ def worker_fn(
             _, data = data
             timestamp = int(str(time.time_ns())[:10])
             doc = db.unblacklist("submissions", data['team_id'], "", timestamp)
+            
+            prefix = data['team_id']+"_"+data['assignment_id'][:-2]
+            
+            if prefix+"T1" in team_dict:
+                team_dict[prefix+"T1"] = 0
+            
+            if prefix+"T2" in team_dict:
+                team_dict[prefix+"T2"] = 0
+            
+            if prefix+"T1" in running_dict:
+                running_dict[prefix+"T1"] = 0
+            
+            if prefix+"T2" in running_dict:
+                running_dict[prefix+"T2"] = 0
+            
             print(f"[{get_datetime()}] [worker_{worker_rank}] [blacklist_thread]\tUnblacklisted Team : {data['team_id']}.")
-            
-            if data['team_id']+"_"+data['assignment_id'][:-2]+"T1" in team_dict:
-                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T1"] = 0
-            if data['team_id']+"_"+data['assignment_id'][:-2]+"T2" in team_dict:
-                team_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T2"] = 0
-            
-            if data['team_id']+"_"+data['assignment_id'][:-2]+"T1" in running_dict:
-                running_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T1"] = 0
-            if data['team_id']+"_"+data['assignment_id'][:-2]+"T2" in running_dict:
-                running_dict[data['team_id']+"_"+data['assignment_id'][:-2]+"T2"] = 0
 
     def thread_fn(rank, event: threading.Event):
-        print(rank, 
-            "hadoop-3.2.2:0.1", 
-            cpu_limit, 
-            mem_limit, 
-            mem_swappiness, 
-            host_output_dir, 
-            container_output_dir)
-
         request_url, docker_container, port_list = start_container(
             rank, 
             "hadoop-3.2.2:0.1", 
             cpu_limit, 
             mem_limit, 
+            taskset,
             mem_swappiness, 
             host_output_dir, 
             container_output_dir
@@ -293,6 +297,7 @@ def worker_fn(
                     docker_image, 
                     cpu_limit, 
                     mem_limit, 
+                    taskset,
                     mem_swappiness, 
                     host_output_dir, 
                     container_output_dir
@@ -324,7 +329,6 @@ def worker_fn(
             docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)
             _ = docker_kill_process.wait()
 
-    
     threads : List[threading.Thread] = []
     thread_events : List[threading.Event] = []
     

@@ -2,23 +2,11 @@ import os
 import sys
 import time
 
-from datetime import datetime
 from dotenv import load_dotenv
-from pymongo import MongoClient
+from common.db import DataBase
+from common.utils import Tee, get_datetime
 
 load_dotenv(os.path.join(os.getcwd(), '.env'))
-
-client_rr = MongoClient(os.getenv('MONGO_URI_RR'), connect=False)
-db_rr = client_rr['bd']
-assignment_rr = db_rr['assignmentQuestion']
-
-client_ec = MongoClient(os.getenv('MONGO_URI_EC'), connect=False)
-db_ec = client_ec['bd']
-assignment_ec = db_ec['assignmentQuestion']
-
-evaluator_internal_ip = os.getenv('EVALUATOR_INTERNAL_IP')
-evaluator_external_ip = os.getenv('EVALUATOR_EXTERNAL_IP')
-
 os.environ['TZ'] = 'Asia/Kolkata'
 time.tzset()
 
@@ -28,42 +16,17 @@ ASSIGNMENT_CLOSE_MESSAGE = "Portal will open on 10th Nov, 2022."
 
 sleep_until = 'Sat Nov 05 23:59:10 2022' # String format might be locale dependent.
 
-def get_datetime() -> str:
-    now = datetime.now()
-    timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
-    return timestamp
-
-class Tee(object):
-    def __init__(self, *files):
-        self.files = files
-    def write(self, obj):
-        for f in self.files:
-            f.write(obj)
-    def flush(self):
-        pass
-
 f = open(f'./close_assignment_logs.txt', 'a+')
 backup = sys.stdout
 sys.stdout = Tee(sys.stdout, f)
-
+db = DataBase()
 print("Sleeping until {}...".format(sleep_until))
 print(time.mktime(time.strptime(sleep_until)) - time.time())
 
 if time.mktime(time.strptime(sleep_until)) - time.time() >= 0:
     time.sleep(time.mktime(time.strptime(sleep_until)) - time.time())
 
-doc = assignment_rr.find_one({'assignmentId' : CURRENT_ASSIGNMENT})
-doc['assignmentOpen'] = ASSIGNMENT_OPEN
-doc['assignmentClosedMessage'] = ASSIGNMENT_CLOSE_MESSAGE
-
-doc = assignment_rr.find_one_and_update({'assignmentId': CURRENT_ASSIGNMENT}, {'$set': {'assignmentOpen': doc['assignmentOpen'], 'assignmentClosedMessage': doc['assignmentClosedMessage']}})
-
-doc = assignment_ec.find_one({'assignmentId' : CURRENT_ASSIGNMENT})
-doc['assignmentOpen'] = ASSIGNMENT_OPEN
-doc['assignmentClosedMessage'] = ASSIGNMENT_CLOSE_MESSAGE
-
-doc = assignment_ec.find_one_and_update({'assignmentId': CURRENT_ASSIGNMENT}, {'$set': {'assignmentOpen': doc['assignmentOpen'], 'assignmentClosedMessage': doc['assignmentClosedMessage']}})
-
+db.close_assignment(CURRENT_ASSIGNMENT, ASSIGNMENT_CLOSE_MESSAGE)
 print(f"[{get_datetime()}]\tAssignment : {CURRENT_ASSIGNMENT} Closed.")
 
 PORTAL_SHUTDOWN_TIME = 'Sun Nov 06 00:30:00 2022'

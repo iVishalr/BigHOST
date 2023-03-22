@@ -1,7 +1,7 @@
 from re import L
 from redis import Redis, ConnectionPool
 from job_tracker import Job
-from queues.redisqueue import RedisQueue
+from common.redisqueue import RedisQueue
 from flask import Flask, request, jsonify
 
 import json
