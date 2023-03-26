@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import uuid
 import signal
 import requests
 import threading
@@ -8,8 +9,6 @@ import multiprocessing
 
 from time import sleep
 from typing import Dict, List
-
-from output_processor import output
 from .worker import worker_fn
 from datetime import datetime
 
@@ -38,6 +37,7 @@ class ExecutorContext:
     
     def __init__(
         self, 
+        name: str = None, 
         fetch_ip : str = "0.0.0.0",
         fetch_port : int = 10000,
         fetch_route : str = "receive",
@@ -48,7 +48,8 @@ class ExecutorContext:
         prefetch_factor: int = 2,
         threshold: int = 16,
         num_backends: int = 8,
-        timeout: int = 60
+        timeout: int = 60,
+        log_dir: str = "logs"
         ) -> None:
 
         """
@@ -91,6 +92,10 @@ class ExecutorContext:
         self.blacklist_queue = self.manager.Queue()
         self.lock = self.manager.Lock()
 
+        self.executor_name: str = name
+        self.executor_uuid: str = str(uuid.uuid4())
+        self.log_dir = log_dir
+
         assert num_backends % num_workers == 0, "num_backends must be completely divisible by num_workers"
 
         self.num_threads = num_backends // num_workers
@@ -100,11 +105,18 @@ class ExecutorContext:
         if global_queue_thread == False and global_prefetch_thread == True:
             AssertionError(f"global_queue_thread needs to be True when global_prefetch_thread=True, but got global_queue_thread={global_queue_thread}.")
 
+        # create log directories
+        self.log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
+        if not os.path.exists(self.log_path):
+            os.makedirs(self.log_path)
+
         if global_queue_thread == True and global_prefetch_thread == True:
             self.executor_mode = 0
             self.executor_mode_desc = f"Maintaining a global queue thread and {self.num_prefetch_threads} prefetch threads."
         else:
             self.executor_mode_desc = f"Each worker will maintain its own queue thread and a prefetch thread. (NOT IMPLEMENTED)"
+
+        self.register_executor()
 
     def __str__(self) -> str:
         buffer = []
@@ -131,10 +143,36 @@ class ExecutorContext:
         buffer.append("\n")
         return "\n".join(buffer)
 
-    def signal_handler(self,sig, frame):
+    def signal_handler(self, sig, frame):
         self.cleanup()
         print(f'[{executor.get_datetime()}] [master_p]\tEvaluator has been stopped.')
         sys.exit(0)
+
+    def register_executor(self) -> bool:
+        payload = {
+            'executor_name': self.executor_name,
+            'executor_uuid': self.executor_uuid,
+            'executor_log_dir': self.log_dir,
+            'num_backends': self.num_backends,
+            'num_workers': self.num_workers,
+            'num_threads': self.num_threads,
+            'num_prefetch_threads': self.num_prefetch_threads,
+            'prefetch_factor': self.prefetch_factor,
+            'threshold': self.threshold,
+            'timeout': self.timeout,
+        }
+        
+        url = f"http://{self.fetch_ip}:{self.fetch_port}/register_executor"
+        r = requests.post(url, data = json.dumps(payload))
+        res = json.loads(r.text)
+        r.close()
+
+        if int(res["status"]) == 200:
+            # print(f"[{self.get_datetime()}]\tExecutor registered with backend server.")
+            return True
+        else:
+            print(f"[{self.get_datetime()}]\tFailed to register this executor with backend server.")
+            return False
 
     def spawn_workers(self, target_fn, args=()) -> List:
         workers = []
@@ -176,21 +214,28 @@ class ExecutorContext:
         num_submissions = -1
         request_url = f"http://{self.fetch_ip}:{self.fetch_port}/{self.fetch_route}"
         r = requests.get(request_url, params={"prefetch_factor": self.prefetch_factor})
+        r.close()
         if r.status_code != 200:
             print(f"Message : {json.loads(r.text)}")
             print(f"Status Code : {r.status_code}")
         else:
             res = json.loads(r.text)
-            num_submissions = res["num_submissions"]
-            if num_submissions != 0: 
-                print(f"[{self.get_datetime()}] [prefet_{rank}]\tQueued {num_submissions} Submissions in Job Queue | Current Queue Length : {len(redis_queue)}")
+
+            if int(res["status"]) == 200:
+                num_submissions = res["num_submissions"]
+                if num_submissions != 0: 
+                    print(f"[{self.get_datetime()}] [prefet_{rank}]\tQueued {num_submissions} Submissions in Job Queue | Current Queue Length : {len(redis_queue)}")
+                else:
+                    print(f"[{self.get_datetime()}] [prefet_{rank}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
+                if num_submissions < self.threshold:
+                    self.thread_res.set()
+                else:
+                    self.thread_res.clear()
             else:
-                print(f"[{self.get_datetime()}] [prefet_{rank}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
-        r.close()
-        if num_submissions < self.threshold:
-            self.thread_res.set()
-        else:
-            self.thread_res.clear()
+                if self.register_executor():
+                    self.prefetch_fn(rank)
+                else:
+                    print(f"[{self.get_datetime()}] [prefet_{rank}]\tFailed to register this executor| Current Queue Length : {len(redis_queue)}")
 
     def global_queue_fn(self):
         joined = 0
@@ -314,6 +359,7 @@ if __name__ == "__main__":
     docker_config = configs["docker"]
 
     executor = ExecutorContext(
+        name=executor_config["name"],
         fetch_ip=BACKEND_INTERNAL_IP,
         fetch_port=executor_config["fetch_port"],
         fetch_route=executor_config["fetch_route"],
@@ -341,9 +387,12 @@ if __name__ == "__main__":
     backend_docker_output_dir: str = docker_config["docker_output_dir"]
     backend_memswapiness: int = docker_config["docker_memswapiness"]
     backend_spawn_wait: int = docker_config["spawn_wait"]
+    backend_blacklist_threshold: int = docker_config["blacklist_threshold"]
+    backend_blacklist_duration: int = docker_config["blacklist_duration"]
 
     executor.execute(
         worker_fn, args=(
+            executor.log_path,
             executor.team_dict, 
             executor.running_dict, 
             executor.lock, 
@@ -359,7 +408,9 @@ if __name__ == "__main__":
             backend_memswapiness, 
             backend_host_output_dir, 
             backend_docker_output_dir, 
-            backend_spawn_wait
-            )
+            backend_spawn_wait,
+            backend_blacklist_threshold,
+            backend_blacklist_duration
         )
+    )
     signal.pause()

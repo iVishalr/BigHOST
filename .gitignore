@@ -2,6 +2,8 @@
 *logs.txt
 compile-test/
 output/
+configs/
+logs/
 # answer/A1T1
 # answer/A1T2
 *logs.txt

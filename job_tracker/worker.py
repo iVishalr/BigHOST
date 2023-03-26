@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import json
@@ -22,6 +23,7 @@ from job_tracker import output_queue, docker_client
 
 def worker_fn(
         worker_rank: int,
+        worker_log_path: str,
         team_dict: dict,
         running_dict: dict,
         worker_lock,
@@ -37,13 +39,12 @@ def worker_fn(
         mem_swappiness: int,
         host_output_dir: str, 
         container_output_dir: str,
-        container_spawn_wait: int
+        container_spawn_wait: int,
+        blacklist_threshold: int,
+        blacklist_duration: int
     ):
 
-    blacklist_threshold = 5
-    blacklist_duration = 120 # in minutes
-
-    f = open(f'./worker{worker_rank}_logs.txt', 'a+')
+    f = open(os.path.join(worker_log_path, f'worker{worker_rank}_logs.txt'), 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
     db = DataBase()

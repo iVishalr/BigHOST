@@ -1,5 +1,12 @@
 {
+	"backend": {
+		"name": "backend",
+		"log_dir": "/home/vishalr/Desktop/backend-2022/logs/",
+		"config_dir": "/home/vishalr/Desktop/backend-2022/configs/"
+	},
+
 	"executor": {
+		"name": "Assignment2",
 		"num_backends": 2,
 		"num_workers": 1,
 		"fetch_port": 9000,
@@ -9,7 +16,8 @@
 		"threshold": 8,
 		"global_queue_thread": true,
 		"global_prefetch_thread": true,
-		"timeout": 30
+		"timeout": 30,
+		"log_dir": "/home/vishalr/Desktop/backend-2022/logs/"
 	},
 
 	"docker": {
@@ -23,6 +31,8 @@
 		"shared_output_dir": "/home/vishalramesh01/backend-2022/output/",
 		"docker_output_dir": "/output",
 		"docker_memswapiness": 0,
-		"spawn_wait": 40
+		"spawn_wait": 40,
+		"blacklist_threshold": 5,
+		"blacklist_duration": 120
 	}
 }

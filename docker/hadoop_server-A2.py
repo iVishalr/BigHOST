@@ -122,8 +122,15 @@ def create_hdfs_directory(dirname: str) -> int:
     logger.mark(f"Created Directory - hdfs:{dirname}")
     return res
 
-def delete_hdfs_directories(dirname: str) -> int:
-    process = subprocess.Popen([f"{HDFS} dfs -rm -r {dirname}"], shell=True, text=True)
+def delete_hdfs_directories(dirname: List[str]) -> int:
+    if type(dirname) != list:
+        dirname = [dirname]
+    command = []
+    for dirs in dirname:
+        cmd = f"{HDFS} dfs -rm -r {dirs}"
+        command.append(cmd)
+    command = "&&".join(command)
+    process = subprocess.Popen([command], shell=True, text=True)
     res = process.wait()
     logger.mark(f"Deleted Directory - hdfs:{dirname}")
     return res
@@ -181,14 +188,14 @@ def run_hadoop_job(team_id, assignment_id, submission_id, timeout, mapper: str, 
     """
     
     path = os.path.join(SUBMISSIONS, team_id)
-    if not os.path.exists(path):
-        os.mkdir(path)
+    # if not os.path.exists(path):
+    #     os.mkdir(path)
     
     logger.mark(f"Created Directory - {path}")
 
     task_path = os.path.join(path, submission_id)
     if not os.path.exists(task_path):
-        os.mkdir(task_path)
+        os.makedirs(task_path)
 
     logger.mark(f"Created Directory - {task_path}")
 
@@ -473,10 +480,17 @@ def cleanup(team_id, assign_id, task) -> int:
 
     task_path = TASK_OUTPUT_PATH[assign_id]
 
-    _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task}/{task_path}")
-    _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task}")
-    _ = delete_hdfs_directories(f"/{team_id}/{assign_id}")
-    _ = delete_hdfs_directories(f"/{team_id}")
+    # _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task}/{task_path}")
+    # _ = delete_hdfs_directories(f"/{team_id}/{assign_id}/{task}")
+    # _ = delete_hdfs_directories(f"/{team_id}/{assign_id}")
+    # _ = delete_hdfs_directories(f"/{team_id}")
+
+    _ = delete_hdfs_directories([
+        f"/{team_id}/{assign_id}/{task}/{task_path}", 
+        f"/{team_id}/{assign_id}/{task}",
+        f"/{team_id}/{assign_id}",
+        f"/{team_id}"
+    ])
 
     return 0
 

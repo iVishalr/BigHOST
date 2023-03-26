@@ -12,7 +12,7 @@ from common.db import DataBase
 from common.utils import Tee, get_datetime
 
 from dotenv import load_dotenv
-from flask_backend import queue
+from flask_backend import queue, executor_table
 from flask_cors import cross_origin
 from flask import Flask, request, jsonify
 from signal import signal, SIGPIPE, SIG_DFL
@@ -26,12 +26,30 @@ def createApp():
     os.environ['TZ'] = 'Asia/Kolkata'
     time.tzset()
 
+    config_path = os.path.join(os.getcwd(),"config", "evaluator.json")
+
+    configs = None
+    with open(config_path, "r") as f:
+        configs = json.loads(f.read())
+
     app = Flask(__name__)  
     db = DataBase()
 
-    f = open(f'./sanity_checker_logs.txt', 'a+')
+    configs = configs["backend"]
+    backend_name = configs["name"]
+    backend_logdir = configs["log_dir"]
+    backend_config_dir = configs["config_dir"]
+
+    log_path = os.path.join(backend_logdir, backend_name)
+    if not os.path.exists(log_path):
+        os.makedirs(log_path)
+
+    f = open(os.path.join(log_path, f'sanity_checker_logs.txt'), 'a+')
     backup = sys.stdout
     sys.stdout = Tee(sys.stdout, f)
+
+    def is_registered(executor_ip) -> bool:
+        return executor_ip in executor_table
     
     def delete_files(path):
         for file in os.listdir(path):
@@ -240,13 +258,17 @@ def createApp():
             client_addr = request.environ['REMOTE_ADDR']
         else:
             client_addr = request.environ['HTTP_X_FORWARDED_FOR'] # if behind a proxy
+
+        if not is_registered(str(client_addr)):
+            res = {"status": 401, "msg": f"This executor has not been registered with backend server. Please register before making request"}
+            return jsonify(res)
         
         prefetch_factor = int(request.args.get("prefetch_factor"))
 
         if prefetch_factor is None: prefetch_factor = 1
 
         if len(queue) == 0:
-            res = {"msg": "Submission Queue is currently empty.", "len": len(queue), "num_submissions": 0}
+            res = {"msg": "Submission Queue is currently empty.", "len": len(queue), "num_submissions": 0, "status": 200}
             return jsonify(res)
 
         data = []
@@ -269,10 +291,9 @@ def createApp():
 
         r = requests.post(request_url, data=data)
 
-        res = {"msg": f"Dequeued {length} submissions from queue.", "num_submissions": length, "len": len(queue)}
+        res = {"msg": f"Dequeued {length} submissions from queue.", "num_submissions": length, "len": len(queue), "status": 200}
         # res = {"msg": "dequeued from submission queue", "len": len(queue), "server_response": res}
         return jsonify(res)
-
 
     @app.route("/queue-length", methods=["GET"])
     def queue_length():
@@ -284,6 +305,57 @@ def createApp():
         queue.empty_queue()
         res = {"msg": "Queue Emptied"}
         return jsonify(res)
+
+    @app.route("/register_executor", methods=["POST"])
+    def register_executor():
+        executor_addr = None
+        if request.environ.get('HTTP_X_FORWARDED_FOR') is None:
+            executor_addr = request.environ['REMOTE_ADDR']
+        else:
+            executor_addr = request.environ['HTTP_X_FORWARDED_FOR'] # if behind a proxy
+
+        executor_addr = str(executor_addr)
+
+        data = json.loads(request.data)
+
+        executor_metadata = {
+            'executor_name': data["executor_name"],
+            'executor_uuid': data["executor_uuid"],
+            'executor_log_dir': data["executor_log_dir"],
+            'num_backends': data["num_backends"],
+            'num_workers': data["num_workers"],
+            'num_threads': data["num_threads"],
+            'num_prefetch_threads': data["num_prefetch_threads"],
+            'prefetch_factor': data["prefetch_factor"],
+            'threshold': data["threshold"],
+            'timeout': data["timeout"],
+            'ipaddr': executor_addr,
+        }
+        executor_table[executor_addr] = executor_metadata
+
+        if not os.path.exists(backend_config_dir):
+            os.makedirs(backend_config_dir)
+
+        with open(os.path.join(backend_config_dir, f'{data["executor_name"]}-{data["executor_uuid"]}.json'), 'w', encoding='utf-8') as _f:
+            json.dump(executor_metadata, _f, ensure_ascii=False, indent=4)
+        
+        msg = {"status": 200, "message": "Registered!"}
+        return jsonify(msg)
+
+    @app.route("/executors", methods=["GET"])
+    def get_executors():
+        files = list(os.listdir(backend_config_dir))
+        executors = {}
+        for filename in files:
+            if ".json" not in filename:
+                continue
+            path = os.path.join(backend_config_dir, filename)
+            e = open(path,"r")
+            executor = json.loads(e.read())
+            e.close()
+            executors[executor['ipaddr']] = executor
+        
+        return jsonify(executors)
 
     return app
 
