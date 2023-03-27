@@ -287,11 +287,17 @@ def createApp():
         length = len(data)
         data = json.dumps(data)
 
-        request_url = f"http://{client_addr}:10001/submit-job"
+        # request_url = f"http://{client_addr}:10001/submit-job"
 
-        r = requests.post(request_url, data=data)
+        # r = requests.post(request_url, data=data)
 
-        res = {"msg": f"Dequeued {length} submissions from queue.", "num_submissions": length, "len": len(queue), "status": 200}
+        res = {
+            "msg": f"Dequeued {length} submissions from queue.", 
+            "num_submissions": length, 
+            "len": len(queue), 
+            "status": 200,
+            "jobs": data
+        }
         # res = {"msg": "dequeued from submission queue", "len": len(queue), "server_response": res}
         return jsonify(res)
 

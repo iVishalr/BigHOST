@@ -220,13 +220,17 @@ class ExecutorContext:
             print(f"Status Code : {r.status_code}")
         else:
             res = json.loads(r.text)
-
             if int(res["status"]) == 200:
                 num_submissions = res["num_submissions"]
                 if num_submissions != 0: 
+                    submission_data = json.loads(res["jobs"])
+                    queue_url = f"http://localhost:10001/submit-job"
+                    r_ = requests.post(queue_url, data = json.dumps(submission_data))
+                    r_.close()
                     print(f"[{self.get_datetime()}] [prefet_{rank}]\tQueued {num_submissions} Submissions in Job Queue | Current Queue Length : {len(redis_queue)}")
                 else:
                     print(f"[{self.get_datetime()}] [prefet_{rank}]\tNo more submissions to fetch | Current Queue Length : {len(redis_queue)}")
+                
                 if num_submissions < self.threshold:
                     self.thread_res.set()
                 else:

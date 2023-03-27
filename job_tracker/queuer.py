@@ -5,6 +5,7 @@ import pickle
 from job_tracker import queue
 from common.db import DataBase
 from flask import Flask, request, jsonify
+from flask_cors import cross_origin
 from job_tracker.job import MRJob, SparkJob, KafkaJob
 from output_processor import queue as output_queue
 
@@ -18,8 +19,8 @@ def updateSubmission(marks, message, data):
     doc = db.update("submissions", data['teamId'], None, data['assignmentId'], str(data['submissionId']), marks, message, timestamp)
 
 @app.route("/submit-job", methods=["POST"])
+@cross_origin()
 def submit_job():
-
     submission_data = json.loads(request.data)
 
     for i in range(len(submission_data)):

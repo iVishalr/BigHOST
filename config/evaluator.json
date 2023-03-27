@@ -1,8 +1,8 @@
 {
 	"backend": {
 		"name": "backend",
-		"log_dir": "/home/vishalr/Desktop/backend-2022/logs/",
-		"config_dir": "/home/vishalr/Desktop/backend-2022/configs/"
+		"log_dir": "/home/vishalramesh01/backend-2022/logs/",
+		"config_dir": "/home/vishalramesh01/backend-2022/configs/"
 	},
 
 	"executor": {
@@ -17,7 +17,7 @@
 		"global_queue_thread": true,
 		"global_prefetch_thread": true,
 		"timeout": 30,
-		"log_dir": "/home/vishalr/Desktop/backend-2022/logs/"
+		"log_dir": "/home/vishalramesh01/backend-2022/logs/"
 	},
 
 	"docker": {
