@@ -12,8 +12,8 @@ import random
 # print(res)
 # print(r.status_code)
 
-url = "http://35.213.133.27:9000/sanity-check"
-# url = "http://localhost:9000/sanity-check"
+# url = "http://35.213.133.27:9000/sanity-check"
+url = "http://localhost:9000/sanity-check"
 
 # data = {'teamId': 'BD1_ADMIN_09', 
 # 'assignmentId': 'A1T1', 

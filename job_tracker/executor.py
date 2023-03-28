@@ -8,12 +8,13 @@ import threading
 import multiprocessing
 
 from time import sleep
+from common.utils import Tee
 from typing import Dict, List
 from .worker import worker_fn
 from datetime import datetime
 
 from job_tracker import broker, queue as redis_queue, BACKEND_INTERNAL_IP
-from common.utils import Tee
+import platform,socket,re,psutil,logging
 
 f = open('./logs.txt', 'w+')
 backup = sys.stdout
@@ -49,7 +50,8 @@ class ExecutorContext:
         threshold: int = 16,
         num_backends: int = 8,
         timeout: int = 60,
-        log_dir: str = "logs"
+        log_dir: str = "logs",
+        log_timeout: int = 120
         ) -> None:
 
         """
@@ -95,6 +97,7 @@ class ExecutorContext:
         self.executor_name: str = name
         self.executor_uuid: str = str(uuid.uuid4())
         self.log_dir = log_dir
+        self.log_timeout = log_timeout
 
         assert num_backends % num_workers == 0, "num_backends must be completely divisible by num_workers"
 
@@ -116,7 +119,8 @@ class ExecutorContext:
         else:
             self.executor_mode_desc = f"Each worker will maintain its own queue thread and a prefetch thread. (NOT IMPLEMENTED)"
 
-        self.register_executor()
+        if not self.register_executor():
+            exit(1)
 
     def __str__(self) -> str:
         buffer = []
@@ -148,6 +152,22 @@ class ExecutorContext:
         print(f'[{executor.get_datetime()}] [master_p]\tEvaluator has been stopped.')
         sys.exit(0)
 
+    def get_sys_report(self):
+        try:
+            info={}
+            info['platform']=platform.system()
+            info['platform-release']=platform.release()
+            info['platform-version']=platform.version()
+            info['architecture']=platform.machine()
+            info['hostname']=socket.gethostname()
+            info['ip-address']=socket.gethostbyname(socket.gethostname())
+            info['mac-address']=':'.join(re.findall('..', '%012x' % uuid.getnode()))
+            info['processor']=platform.processor()
+            info['ram']=str(round(psutil.virtual_memory().total / (1024.0 **3)))+" GB"
+            return info
+        except Exception as e:
+            logging.exception(e)
+
     def register_executor(self) -> bool:
         payload = {
             'executor_name': self.executor_name,
@@ -160,6 +180,9 @@ class ExecutorContext:
             'prefetch_factor': self.prefetch_factor,
             'threshold': self.threshold,
             'timeout': self.timeout,
+            'cpu_limit': backend_cpu_limit,
+            'mem_limit': backend_mem_limit,
+            'sys_info': self.get_sys_report()
         }
         
         url = f"http://{self.fetch_ip}:{self.fetch_port}/register_executor"
@@ -204,6 +227,57 @@ class ExecutorContext:
                 args = tuple(args)
             threads.append(threading.Thread(target=target_fn, args=args))
         return threads
+
+    def get_logs(self, path):
+        logs = {}
+        for filename in os.listdir(path):
+            if ".txt" not in filename:
+                continue
+            f = open(os.path.join(path, filename), "r")
+            logs[filename] = f.read()
+            f.close()
+        return logs
+
+    def logs_fn(self):
+        timeout = self.log_timeout
+        url = f"http://{self.fetch_ip}:{self.fetch_port}/executor-log"
+        executor_log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
+        
+        while not self.global_queue_thread.stopped():
+            logs = self.get_logs(executor_log_path)
+            payload = {
+                'executor_name': self.executor_name,
+                'executor_uuid': self.executor_uuid,
+                'logs': json.dumps(logs),
+            }
+            r = requests.post(url, data=json.dumps(payload))
+            res = json.loads(r.text)
+            r.close()
+
+            if int(res["status"]) == 200:
+                print(f"[{self.get_datetime()}] [log thread]\tSent logs to backend server.")
+            else:
+                print(f"[{self.get_datetime()}] [log thread]\tFailed to send logs to backend server.")
+
+            sleep(timeout)
+
+        # send final logs before stopping
+        logs = self.get_logs(executor_log_path)
+        payload = {
+            'executor_name': self.executor_name,
+            'executor_uuid': self.executor_uuid,
+            'logs': json.dumps(logs),
+        }
+        r = requests.post(url, data=json.dumps(payload))
+        res = json.loads(r.text)
+        r.close()
+
+        if int(res["status"]) == 200:
+            print(f"[{self.get_datetime()}] [log thread]\tSent logs to backend server.")
+        else:
+            print(f"[{self.get_datetime()}] [log thread]\tFailed to send logs to backend server.")
+        
+        return
 
     def get_datetime(self) -> str:
         now = datetime.now()
@@ -317,6 +391,9 @@ class ExecutorContext:
         for workers in self.workers:
             workers.start()
 
+        self.log_thread = threading.Thread(target=self.logs_fn)
+        self.log_thread.start()
+
         for signame in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT, signal.SIGCHLD]:
             signal.signal(signame, self.signal_handler)
     
@@ -330,6 +407,8 @@ class ExecutorContext:
         print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
         self.global_queue_cleanup()
         self.global_queue_thread.join(timeout=20)
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Log Thread")
+        self.log_thread.join(timeout=20)
         broker.close()
 
     def local_execute(self, target_fn):
@@ -362,23 +441,6 @@ if __name__ == "__main__":
     executor_config = configs["executor"]
     docker_config = configs["docker"]
 
-    executor = ExecutorContext(
-        name=executor_config["name"],
-        fetch_ip=BACKEND_INTERNAL_IP,
-        fetch_port=executor_config["fetch_port"],
-        fetch_route=executor_config["fetch_route"],
-        num_workers=executor_config["num_workers"],
-        global_queue_thread=executor_config["global_queue_thread"],
-        global_prefetch_thread=executor_config["global_prefetch_thread"],
-        prefetch_threads=executor_config["prefetch_threads"],
-        prefetch_factor=executor_config["prefetch_factor"],
-        threshold=executor_config["threshold"],
-        num_backends=executor_config["num_backends"],
-        timeout=executor_config["timeout"]
-    )
-
-    print(executor)
-
     docker_ip = docker_config["docker_ip"]
     docker_port = docker_config["docker_port"]
     docker_route = docker_config["docker_route"]
@@ -393,6 +455,24 @@ if __name__ == "__main__":
     backend_spawn_wait: int = docker_config["spawn_wait"]
     backend_blacklist_threshold: int = docker_config["blacklist_threshold"]
     backend_blacklist_duration: int = docker_config["blacklist_duration"]
+
+    executor = ExecutorContext(
+        name=executor_config["name"],
+        fetch_ip=BACKEND_INTERNAL_IP,
+        fetch_port=executor_config["fetch_port"],
+        fetch_route=executor_config["fetch_route"],
+        num_workers=executor_config["num_workers"],
+        global_queue_thread=executor_config["global_queue_thread"],
+        global_prefetch_thread=executor_config["global_prefetch_thread"],
+        prefetch_threads=executor_config["prefetch_threads"],
+        prefetch_factor=executor_config["prefetch_factor"],
+        threshold=executor_config["threshold"],
+        num_backends=executor_config["num_backends"],
+        timeout=executor_config["timeout"],
+        log_dir=executor_config["log_dir"]
+    )
+
+    print(executor)
 
     executor.execute(
         worker_fn, args=(

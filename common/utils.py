@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 
 class Tee(object):
@@ -8,6 +9,19 @@ class Tee(object):
             f.write(obj)
     def flush(self):
         pass
+
+class Logger(object):
+    def __init__(self, filename, mode):
+        self.console = sys.stdout
+        self.file = open(filename, mode)
+ 
+    def write(self, message):
+        self.console.write(message)
+        self.file.write(message)
+ 
+    def flush(self):
+        self.console.flush()
+        self.file.flush()
 
 def get_datetime() -> str:
     now = datetime.now()

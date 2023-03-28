@@ -11,7 +11,7 @@ windows:
       - gunicorn -w 2 --preload --timeout 90 --bind 0.0.0.0:10001 "job_tracker.queuer:app"
   - mailer:
       - sleep 10
-      - python3 -m smtp.mailer
+      - python3 -m common.mailer
   - output:
       - sleep 10
       - python3 -m output_processor.output

@@ -9,7 +9,7 @@ import subprocess
 
 from common import mail_queue
 from common.db import DataBase
-from common.utils import Tee, get_datetime
+from common.utils import Tee, get_datetime, Logger
 
 from dotenv import load_dotenv
 from flask_backend import queue, executor_table
@@ -39,14 +39,23 @@ def createApp():
     backend_name = configs["name"]
     backend_logdir = configs["log_dir"]
     backend_config_dir = configs["config_dir"]
+    
+    log_timestamp = "-".join(('-'.join(get_datetime().split(' '))).split('/'))
+    backend_config_dir = os.path.join(backend_config_dir, log_timestamp)
+    log_path = os.path.join(backend_logdir, backend_name, log_timestamp)
+    executor_log_dir = os.path.join(backend_logdir, "executor", log_timestamp)
 
-    log_path = os.path.join(backend_logdir, backend_name)
     if not os.path.exists(log_path):
         os.makedirs(log_path)
+    
+    if not os.path.exists(executor_log_dir):
+        os.makedirs(executor_log_dir)
 
-    f = open(os.path.join(log_path, f'sanity_checker_logs.txt'), 'a+')
-    backup = sys.stdout
-    sys.stdout = Tee(sys.stdout, f)
+    # f = open(os.path.join(log_path, f'sanity_checker_logs.txt'), 'a+')
+    # backup = sys.stdout
+    # sys.stdout = Tee(sys.stdout, f)
+
+    sys.stdout = Logger(os.path.join(log_path, f'sanity_checker_logs.txt'), 'a+')
 
     def is_registered(executor_ip) -> bool:
         return executor_ip in executor_table
@@ -279,17 +288,13 @@ def createApp():
             if queue_data is None:
                 break
             
-            queue_name, serialized_job = queue_data
+            _, serialized_job = queue_data
             job = pickle.loads(serialized_job)
             data.append(job)
             i += 1  
 
         length = len(data)
         data = json.dumps(data)
-
-        # request_url = f"http://{client_addr}:10001/submit-job"
-
-        # r = requests.post(request_url, data=data)
 
         res = {
             "msg": f"Dequeued {length} submissions from queue.", 
@@ -298,18 +303,6 @@ def createApp():
             "status": 200,
             "jobs": data
         }
-        # res = {"msg": "dequeued from submission queue", "len": len(queue), "server_response": res}
-        return jsonify(res)
-
-    @app.route("/queue-length", methods=["GET"])
-    def queue_length():
-        msg = {"length": len(queue)}
-        return jsonify(msg)
-
-    @app.route("/empty-queue", methods=["GET"])
-    def empty_queue():
-        queue.empty_queue()
-        res = {"msg": "Queue Emptied"}
         return jsonify(res)
 
     @app.route("/register_executor", methods=["POST"])
@@ -336,6 +329,9 @@ def createApp():
             'threshold': data["threshold"],
             'timeout': data["timeout"],
             'ipaddr': executor_addr,
+            'cpu_limit': data["cpu_limit"],
+            'mem_limit': data["mem_limit"],
+            'sys_info': data["sys_info"]
         }
         executor_table[executor_addr] = executor_metadata
 
@@ -362,6 +358,72 @@ def createApp():
             executors[executor['ipaddr']] = executor
         
         return jsonify(executors)
+
+    @app.route("/logs", methods=["GET"])
+    def get_logs():
+        logs = {}
+        for executor_addr in executor_table:
+            executor = executor_table[executor_addr]
+            executor_name = executor["executor_name"]
+            executor_uuid = executor["executor_uuid"]
+
+            executor_log_path = os.path.join(executor_log_dir, executor_name, executor_uuid)
+
+            if not os.path.exists(executor_log_path):
+                logs[executor_addr] = None
+                continue
+
+            logfile = {}
+            for logname in os.listdir(executor_log_path):
+                f = open(os.path.join(executor_log_path, logname), "r")
+                logfile[logname] = f.read()
+                f.close()
+            logs[executor_addr] = logfile
+        
+        res = {"status": 200, "logs": logs}
+        return jsonify(res)
+
+    @app.route("/executor-log", methods=["POST"])
+    def executor_log():
+        if request.environ.get('HTTP_X_FORWARDED_FOR') is None:
+            executor_addr = request.environ['REMOTE_ADDR']
+        else:
+            executor_addr = request.environ['HTTP_X_FORWARDED_FOR'] # if behind a proxy
+
+        executor_addr = str(executor_addr)
+
+        data = json.loads(request.data)
+        executor_name = data["executor_name"]
+        executor_uuid = data["executor_uuid"]
+
+        if executor_addr not in executor_table:
+            res = {"status": 401, "message": "Executor not registered with backend server."}
+            return jsonify(res)
+        
+        executor_log_path = os.path.join(executor_log_dir, executor_name, executor_uuid)
+
+        if not os.path.exists(executor_log_path):
+            os.makedirs(executor_log_path)
+        
+        logs = json.loads(data["logs"])
+        for logname in logs:
+            f = open(os.path.join(executor_log_path, logname), "w")
+            f.write(logs[logname])
+            f.close()
+        
+        res = {"status": 200, "message": "Received!"}
+        return jsonify(res)
+
+    @app.route("/queue-length", methods=["GET"])
+    def queue_length():
+        msg = {"length": len(queue)}
+        return jsonify(msg)
+
+    @app.route("/empty-queue", methods=["GET"])
+    def empty_queue():
+        queue.empty_queue()
+        res = {"msg": "Queue Emptied"}
+        return jsonify(res)
 
     return app
 
