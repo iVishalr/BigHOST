@@ -1,5 +1,6 @@
 *.tar.gz
 *logs.txt
+sys.txt
 compile-test/
 output/
 configs/

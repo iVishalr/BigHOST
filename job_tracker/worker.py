@@ -14,7 +14,7 @@ from typing import Dict, List
 
 from common import mail_queue
 from common.db import DataBase
-from common.utils import Tee, get_datetime
+from common.utils import Tee, get_datetime, Logger
 
 from contextlib import closing
 from queue import PriorityQueue
@@ -44,9 +44,10 @@ def worker_fn(
         blacklist_duration: int
     ):
 
-    f = open(os.path.join(worker_log_path, f'worker{worker_rank}_logs.txt'), 'a+')
-    backup = sys.stdout
-    sys.stdout = Tee(sys.stdout, f)
+    # f = open(os.path.join(worker_log_path, f'worker{worker_rank}_logs.txt'), 'a+')
+    # backup = sys.stdout
+    # sys.stdout = Tee(sys.stdout, f)
+    sys.stdout = Logger(os.path.join(worker_log_path, f'worker{worker_rank}_logs.txt'), 'a+')
     db = DataBase()
 
     def updateSubmission(marks, message, data, send_mail=False):

@@ -8,7 +8,7 @@ import threading
 import multiprocessing
 
 from time import sleep
-from common.utils import Tee
+from common.utils import Tee, Logger
 from typing import Dict, List
 from .worker import worker_fn
 from datetime import datetime
@@ -16,9 +16,11 @@ from datetime import datetime
 from job_tracker import broker, queue as redis_queue, BACKEND_INTERNAL_IP
 import platform,socket,re,psutil,logging
 
-f = open('./logs.txt', 'w+')
-backup = sys.stdout
-sys.stdout = Tee(sys.stdout, f)
+# f = open('./logs.txt', 'w+')
+# backup = sys.stdout
+# sys.stdout = Tee(sys.stdout, f)
+
+sys.stdout = Logger("./logs.txt", "a+")
 
 class QueueThread(threading.Thread):
     """Thread class with a stop() method. The thread itself has to check
@@ -51,7 +53,8 @@ class ExecutorContext:
         num_backends: int = 8,
         timeout: int = 60,
         log_dir: str = "logs",
-        log_timeout: int = 120
+        log_timeout: int = 120,
+        sys_timeout: int = 1,
         ) -> None:
 
         """
@@ -98,6 +101,7 @@ class ExecutorContext:
         self.executor_uuid: str = str(uuid.uuid4())
         self.log_dir = log_dir
         self.log_timeout = log_timeout
+        self.sys_timeout = sys_timeout
 
         assert num_backends % num_workers == 0, "num_backends must be completely divisible by num_workers"
 
@@ -151,6 +155,26 @@ class ExecutorContext:
         self.cleanup()
         print(f'[{executor.get_datetime()}] [master_p]\tEvaluator has been stopped.')
         sys.exit(0)
+
+    def poll_cpu(self):
+        
+        """
+        Fetch current CPU, RAM and Swap utilisation
+        Returns
+        -------
+        float
+            CPU utilisation (percentage)
+        float
+            RAM utilisation (percentage)
+        float
+            Swap utilisation (percentage)
+        """
+
+        return (
+            psutil.cpu_percent(),
+            psutil.virtual_memory().percent,
+            psutil.swap_memory().percent,
+        )
 
     def get_sys_report(self):
         try:
@@ -231,24 +255,85 @@ class ExecutorContext:
     def get_logs(self, path):
         logs = {}
         for filename in os.listdir(path):
-            if ".txt" not in filename:
+            if ".txt" not in filename or 'worker' not in filename:
                 continue
             f = open(os.path.join(path, filename), "r")
             logs[filename] = f.read()
             f.close()
         return logs
 
+    def get_sys_logs(self, path):
+        logs = {}
+        for filename in os.listdir(path):
+            if ".txt" not in filename or 'sys' not in filename:
+                continue
+            f = open(os.path.join(path, filename), "r")
+            logs[filename] = f.read()
+            f.close()
+        return logs
+
+    def sys_fn(self):
+        print(f"[{self.get_datetime()}] [sys thread]\tStarting.")
+        timeout = self.sys_timeout
+        log_timeout = self.log_timeout
+        executor_log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
+        f = open(os.path.join(executor_log_path, "sys_logs.txt"), "a+")
+        
+        avg_util = {
+            "CPU": {
+                'sum': 0.0,
+                'values': [],
+                'avg': 0.0
+            }, 
+            "Memory": {
+                'sum': 0.0,
+                'values': [],
+                'avg': 0.0
+            }, 
+            "Swap": {
+                'sum': 0.0,
+                'values': [],
+                'avg': 0.0
+            }
+        }
+
+        time_slept = 0
+        while not self.global_queue_thread.stopped():
+            stats = self.poll_cpu()
+            record = f"CPU: {stats[0]:.2f}% | Memory: {stats[1]:.2f}% | Swap: {stats[2]:.2f}%\n"
+
+            for ix, category in enumerate(avg_util.keys()):
+                avg_util[category]["sum"] += stats[ix]
+                avg_util[category]["values"].append(stats[ix])
+                if len(avg_util[category]["values"]) > (log_timeout // timeout):
+                    avg_util[category]["sum"] -= avg_util[category]["values"].pop(0)
+                avg_util[category]["avg"] = avg_util[category]["sum"] / len(avg_util[category]["values"])
+
+            f.write(record)
+            time_slept += timeout
+            sleep(timeout)
+            if time_slept % log_timeout == 0:
+                print(f"[{self.get_datetime()}] [sys thread]\tAverage Utilization over {log_timeout}s - CPU: {avg_util['CPU']['avg']:.2f}% | Memory: {avg_util['Memory']['avg']:.2f}% | Swap: {avg_util['Swap']['avg']:.2f}%.")
+                time_slept = 0
+                f.flush()
+
+        f.close()
+        print(f"[{self.get_datetime()}] [sys thread]\tStopped.")
+
     def logs_fn(self):
+        print(f"[{self.get_datetime()}] [log thread]\tStarting.")
         timeout = self.log_timeout
         url = f"http://{self.fetch_ip}:{self.fetch_port}/executor-log"
         executor_log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
         
         while not self.global_queue_thread.stopped():
             logs = self.get_logs(executor_log_path)
+            syslogs = self.get_sys_logs(executor_log_path)
             payload = {
                 'executor_name': self.executor_name,
                 'executor_uuid': self.executor_uuid,
                 'logs': json.dumps(logs),
+                'syslogs': json.dumps(syslogs),
             }
             r = requests.post(url, data=json.dumps(payload))
             res = json.loads(r.text)
@@ -263,11 +348,14 @@ class ExecutorContext:
 
         # send final logs before stopping
         logs = self.get_logs(executor_log_path)
+        syslogs = self.get_sys_logs(executor_log_path)
         payload = {
             'executor_name': self.executor_name,
             'executor_uuid': self.executor_uuid,
             'logs': json.dumps(logs),
+            'syslogs': json.dumps(syslogs),
         }
+
         r = requests.post(url, data=json.dumps(payload))
         res = json.loads(r.text)
         r.close()
@@ -277,6 +365,7 @@ class ExecutorContext:
         else:
             print(f"[{self.get_datetime()}] [log thread]\tFailed to send logs to backend server.")
         
+        print(f"[{self.get_datetime()}] [log thread]\tStopped.")
         return
 
     def get_datetime(self) -> str:
@@ -370,12 +459,12 @@ class ExecutorContext:
             sleep(queue_thread_timeout)
     
     def global_queue_cleanup(self) -> None:
+        self.global_queue_thread.stop()
+
         for ix, thread in enumerate(self.prefetch_threads):
             if thread.is_alive():
                 print(f"[{self.get_datetime()}] [master_p]\tForce Thread-{ix+1}.join()")
                 thread.join()
-
-        self.global_queue_thread.stop()
 
     def global_execute(self, target_fn, args=None) -> None:
         # spawn a queue thread in master process
@@ -394,21 +483,29 @@ class ExecutorContext:
         self.log_thread = threading.Thread(target=self.logs_fn)
         self.log_thread.start()
 
+        self.sys_thread = threading.Thread(target=self.sys_fn)
+        self.sys_thread.start()
+
         for signame in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT, signal.SIGCHLD]:
             signal.signal(signame, self.signal_handler)
     
     def global_cleanup(self) -> None:
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
+        self.global_queue_cleanup()
+        self.global_queue_thread.join(timeout=20)
+
         for ix, workers in enumerate(self.workers):
             print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}")
             if workers.is_alive():
                 workers.join()
 
-        print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
-        self.global_queue_cleanup()
-        self.global_queue_thread.join(timeout=20)
-        print(f"[{self.get_datetime()}] [master_p]\tTerminating Log Thread")
-        self.log_thread.join(timeout=20)
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Sys Thread")
+        self.sys_thread.join(timeout=self.sys_timeout)
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Log Thread.")
+        print(f"[{self.get_datetime()}] [master_p]\tPlease wait until log thread sends latest logs to backend.")
+        self.log_thread.join(timeout=self.log_timeout)
         broker.close()
 
     def local_execute(self, target_fn):
@@ -469,7 +566,9 @@ if __name__ == "__main__":
         threshold=executor_config["threshold"],
         num_backends=executor_config["num_backends"],
         timeout=executor_config["timeout"],
-        log_dir=executor_config["log_dir"]
+        log_dir=executor_config["log_dir"],
+        log_timeout=executor_config["log_timeout"],
+        sys_timeout=executor_config["sys_timeout"]
     )
 
     print(executor)

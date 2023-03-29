@@ -12,16 +12,18 @@ from time import sleep
 from typing import List
 from .preprocess import *
 from common import mail_queue
-from common.utils import Tee, get_datetime
+from common.utils import Tee, get_datetime, Logger
 
 def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_timeout: int, submission_output_dir: str, answer_key_path: str):
     '''
     Takes a submissions output and compares to the expected output
     '''
 
-    f = open(f'./output_processor_logs.txt', 'a+')
-    backup = sys.stdout
-    sys.stdout = Tee(sys.stdout, f)
+    # f = open(f'./output_processor_logs.txt', 'a+')
+    # backup = sys.stdout
+    # sys.stdout = Tee(sys.stdout, f)
+
+    sys.stdout = Logger("./output_processor_logs.txt", 'a+')
 
     from common.db import DataBase
     from output_processor import queue, broker

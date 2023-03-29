@@ -380,7 +380,7 @@ def createApp():
                 f.close()
             logs[executor_addr] = logfile
         
-        res = {"status": 200, "logs": logs}
+        res = {"logs": logs}
         return jsonify(res)
 
     @app.route("/executor-log", methods=["POST"])
@@ -406,6 +406,12 @@ def createApp():
             os.makedirs(executor_log_path)
         
         logs = json.loads(data["logs"])
+        for logname in logs:
+            f = open(os.path.join(executor_log_path, logname), "w")
+            f.write(logs[logname])
+            f.close()
+
+        logs = json.loads(data["syslogs"])
         for logname in logs:
             f = open(os.path.join(executor_log_path, logname), "w")
             f.write(logs[logname])

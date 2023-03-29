@@ -18,7 +18,8 @@
 		"global_prefetch_thread": true,
 		"timeout": 30,
 		"log_dir": "/home/vishalr/Desktop/backend-2022/executor-logs/",
-		"log_timeout": 120
+		"log_timeout": 120,
+		"sys_timeout": 1
 	},
 
 	"docker": {
