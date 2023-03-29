@@ -252,25 +252,31 @@ class ExecutorContext:
             threads.append(threading.Thread(target=target_fn, args=args))
         return threads
 
-    def get_logs(self, path):
+    def get_logs(self, path, offset):
         logs = {}
+        new_offset = 0
         for filename in os.listdir(path):
             if ".txt" not in filename or 'worker' not in filename:
                 continue
             f = open(os.path.join(path, filename), "r")
+            f.seek(offset)
             logs[filename] = f.read()
+            new_offset = f.tell()
             f.close()
-        return logs
+        return logs, new_offset
 
-    def get_sys_logs(self, path):
+    def get_sys_logs(self, path, offset):
         logs = {}
+        new_offset = 0
         for filename in os.listdir(path):
             if ".txt" not in filename or 'sys' not in filename:
                 continue
             f = open(os.path.join(path, filename), "r")
+            f.seek(offset)
             logs[filename] = f.read()
+            new_offset = f.tell()
             f.close()
-        return logs
+        return logs, new_offset
 
     def sys_fn(self):
         print(f"[{self.get_datetime()}] [sys thread]\tStarting.")
@@ -325,10 +331,10 @@ class ExecutorContext:
         timeout = self.log_timeout
         url = f"http://{self.fetch_ip}:{self.fetch_port}/executor-log"
         executor_log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
-        
+        log_offset, sys_log_offset = 0,0
         while not self.global_queue_thread.stopped():
-            logs = self.get_logs(executor_log_path)
-            syslogs = self.get_sys_logs(executor_log_path)
+            logs, log_offset = self.get_logs(executor_log_path, log_offset)
+            syslogs, sys_log_offset = self.get_sys_logs(executor_log_path, sys_log_offset)
             payload = {
                 'executor_name': self.executor_name,
                 'executor_uuid': self.executor_uuid,
@@ -347,8 +353,8 @@ class ExecutorContext:
             sleep(timeout)
 
         # send final logs before stopping
-        logs = self.get_logs(executor_log_path)
-        syslogs = self.get_sys_logs(executor_log_path)
+        logs, log_offset = self.get_logs(executor_log_path, log_offset)
+        syslogs, sys_log_offset = self.get_sys_logs(executor_log_path, sys_log_offset)
         payload = {
             'executor_name': self.executor_name,
             'executor_uuid': self.executor_uuid,

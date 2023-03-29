@@ -407,13 +407,13 @@ def createApp():
         
         logs = json.loads(data["logs"])
         for logname in logs:
-            f = open(os.path.join(executor_log_path, logname), "w")
+            f = open(os.path.join(executor_log_path, logname), "a+")
             f.write(logs[logname])
             f.close()
 
         logs = json.loads(data["syslogs"])
         for logname in logs:
-            f = open(os.path.join(executor_log_path, logname), "w")
+            f = open(os.path.join(executor_log_path, logname), "a+")
             f.write(logs[logname])
             f.close()
         
