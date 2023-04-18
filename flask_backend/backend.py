@@ -17,6 +17,8 @@ from flask_cors import cross_origin
 from flask import Flask, request, jsonify
 from signal import signal, SIGPIPE, SIG_DFL
 from flask_backend.parser import SanityCheckerASTVisitor
+from job_tracker.job import MRJob, SparkJob, KafkaJob, job_template_selector
+from pprint import pprint
 
 signal(SIGPIPE, SIG_DFL) 
 
@@ -113,12 +115,23 @@ def createApp():
     @cross_origin()
     def sanity_check():
         '''
-        Currently assuming the assignment to be a MR Job
+        BigHOST Sanity Checker
         '''
+
         jobs = json.loads(request.data)
         data = jobs
         
+        job_template = job_template_selector(data["assignmentId"])
+        
+        job = job_template(
+            team_id=data["teamId"],
+            assignment_id=data["assignmentId"],
+            submission_id=data["submissionId"]
+        )
+
+        job.record("received")
         update_submission(marks=-1, message='Sanity Checking', data=data)
+        job.record("sanity_check_start")
 
         compile_path = f"{os.path.join(os.getcwd(),'compile-test', str(data['submissionId']))}"
 
@@ -127,7 +140,7 @@ def createApp():
 
         _ = open(os.path.join(compile_path, "__init__.py"), "w+").close() # required for pylint to work
 
-        if "A3" not in data["assignmentId"]:
+        if "A1" in data["assignmentId"] or "A2" in data["assignmentId"]:
             mapper_data = data["mapper"]
             reducer_data = data['reducer']
             mapper_name = f"{data['teamId']}-{data['assignmentId']}-mapper.py"
@@ -250,10 +263,25 @@ def createApp():
             update_submission(marks=-1, message='Sanity Check Passed', data=data)
 
         data["timeout"] = get_timeouts(assignment_id=data['assignmentId'])
+        
+        job.record("sanity_check_end")
 
-        update_submission(marks=-1, message='Queued for Execution', data=data)
+        if isinstance(job, MRJob):
+            job.mapper = data["mapper"]
+            job.reducer = data["reducer"]
+        elif isinstance(job, SparkJob):
+            job.spark = data["spark"]
+        elif isinstance(job, KafkaJob):
+            job.producer = data["producer"]
+            job.consumer = data["consumer"]
+        
+        job.timeout = data["timeout"]
 
-        data = pickle.dumps(data)
+        update_submission(marks=-1, message='Queued for Execution', data=job.get_db_fields())
+
+        job.record("waiting_queue_entry")
+        
+        data = pickle.dumps(job)
         queue.enqueue(data)
         
         res = {"msg": "Queued", "len": len(queue)}
@@ -280,7 +308,7 @@ def createApp():
             res = {"msg": "Submission Queue is currently empty.", "len": len(queue), "num_submissions": 0, "status": 200}
             return jsonify(res)
 
-        data = []
+        data = {}
         i = 0
         while i < prefetch_factor:
             queue_data = queue.dequeue()
@@ -290,7 +318,9 @@ def createApp():
             
             _, serialized_job = queue_data
             job = pickle.loads(serialized_job)
-            data.append(job)
+            job.record("waiting_queue_exit")
+            # pprint(job.__dict__)
+            data[f"job{i+1}"] = job.__dict__
             i += 1  
 
         length = len(data)
@@ -303,6 +333,7 @@ def createApp():
             "status": 200,
             "jobs": data
         }
+
         return jsonify(res)
 
     @app.route("/register_executor", methods=["POST"])
@@ -405,7 +436,13 @@ def createApp():
         if not os.path.exists(executor_log_path):
             os.makedirs(executor_log_path)
         
-        logs = json.loads(data["logs"])
+        logs = json.loads(data["worker_logs"])
+        for logname in logs:
+            f = open(os.path.join(executor_log_path, logname), "a+")
+            f.write(logs[logname])
+            f.close()
+
+        logs = json.loads(data["output_processor_logs"])
         for logname in logs:
             f = open(os.path.join(executor_log_path, logname), "a+")
             f.write(logs[logname])

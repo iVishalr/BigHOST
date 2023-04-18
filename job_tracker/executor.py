@@ -10,11 +10,11 @@ import multiprocessing
 from time import sleep
 from common.utils import Tee, Logger
 from typing import Dict, List
-from .worker import worker_fn
 from datetime import datetime
 
 from job_tracker import broker, queue as redis_queue, BACKEND_INTERNAL_IP
 import platform,socket,re,psutil,logging
+from pprint import pprint
 
 # f = open('./logs.txt', 'w+')
 # backup = sys.stdout
@@ -55,6 +55,10 @@ class ExecutorContext:
         log_dir: str = "logs",
         log_timeout: int = 120,
         sys_timeout: int = 1,
+        output_processor_threads: int = 1,
+        output_processor_timeout: int = 30,
+        store_lats: bool = True,
+        lats_dir: str = "lats"
         ) -> None:
 
         """
@@ -96,6 +100,14 @@ class ExecutorContext:
         self.running_dict : Dict[str: int] = self.manager.dict()
         self.blacklist_queue = self.manager.Queue()
         self.lock = self.manager.Lock()
+        
+        self.output_processor_event = threading.Event()
+        self.output_processor_threads = output_processor_threads
+        self.output_processor_timeout = output_processor_timeout
+        self.store_lats = store_lats
+        self.lats_dir = lats_dir
+        self.output_processor_args = None
+        self.worker_args = None
 
         self.executor_name: str = name
         self.executor_uuid: str = str(uuid.uuid4())
@@ -116,6 +128,10 @@ class ExecutorContext:
         self.log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
+
+        self.lats_path = os.path.join(self.lats_dir, self.executor_name, self.executor_uuid)
+        if store_lats and not os.path.exists(self.lats_path):
+            os.makedirs(self.lats_path)
 
         if global_queue_thread == True and global_prefetch_thread == True:
             self.executor_mode = 0
@@ -252,17 +268,32 @@ class ExecutorContext:
             threads.append(threading.Thread(target=target_fn, args=args))
         return threads
 
-    def get_logs(self, path, offset):
+    def read_logs(self, path, offset):
+        f = open(path, "r")
+        f.seek(offset)
+        data = f.read()
+        new_offset = f.tell()
+        f.close()
+        return data, new_offset
+
+    def get_worker_logs(self, path, offset):
         logs = {}
         new_offset = 0
         for filename in os.listdir(path):
             if ".txt" not in filename or 'worker' not in filename:
                 continue
-            f = open(os.path.join(path, filename), "r")
-            f.seek(offset)
-            logs[filename] = f.read()
-            new_offset = f.tell()
-            f.close()
+            data, new_offset = self.read_logs(os.path.join(path, filename), offset)
+            logs[filename] = data
+        return logs, new_offset
+
+    def get_op_logs(self, path, offset):
+        logs = {}
+        new_offset = 0
+        for filename in os.listdir(path):
+            if ".txt" not in filename or 'output_processor' not in filename:
+                continue
+            data, new_offset = self.read_logs(os.path.join(path, filename), offset)
+            logs[filename] = data
         return logs, new_offset
 
     def get_sys_logs(self, path, offset):
@@ -271,11 +302,8 @@ class ExecutorContext:
         for filename in os.listdir(path):
             if ".txt" not in filename or 'sys' not in filename:
                 continue
-            f = open(os.path.join(path, filename), "r")
-            f.seek(offset)
-            logs[filename] = f.read()
-            new_offset = f.tell()
-            f.close()
+            data, new_offset = self.read_logs(os.path.join(path, filename), offset)
+            logs[filename] = data
         return logs, new_offset
 
     def sys_fn(self):
@@ -331,16 +359,21 @@ class ExecutorContext:
         timeout = self.log_timeout
         url = f"http://{self.fetch_ip}:{self.fetch_port}/executor-log"
         executor_log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
-        log_offset, sys_log_offset = 0,0
+        
+        wlog_offset, oplog_offset, sys_log_offset = 0, 0, 0
         while not self.global_queue_thread.stopped():
-            logs, log_offset = self.get_logs(executor_log_path, log_offset)
+            wlogs, wlog_offset = self.get_worker_logs(executor_log_path, wlog_offset)
+            oplogs, oplog_offset = self.get_op_logs(executor_log_path, oplog_offset)
             syslogs, sys_log_offset = self.get_sys_logs(executor_log_path, sys_log_offset)
+            
             payload = {
                 'executor_name': self.executor_name,
                 'executor_uuid': self.executor_uuid,
-                'logs': json.dumps(logs),
+                'worker_logs': json.dumps(wlogs),
+                'output_processor_logs': json.dumps(oplogs),
                 'syslogs': json.dumps(syslogs),
             }
+            
             r = requests.post(url, data=json.dumps(payload))
             res = json.loads(r.text)
             r.close()
@@ -353,12 +386,14 @@ class ExecutorContext:
             sleep(timeout)
 
         # send final logs before stopping
-        logs, log_offset = self.get_logs(executor_log_path, log_offset)
+        wlogs, wlog_offset = self.get_worker_logs(executor_log_path, wlog_offset)
+        oplogs, oplog_offset = self.get_op_logs(executor_log_path, oplog_offset)
         syslogs, sys_log_offset = self.get_sys_logs(executor_log_path, sys_log_offset)
         payload = {
             'executor_name': self.executor_name,
             'executor_uuid': self.executor_uuid,
-            'logs': json.dumps(logs),
+            'worker_logs': json.dumps(wlogs),
+            'output_processor_logs': json.dumps(oplogs),
             'syslogs': json.dumps(syslogs),
         }
 
@@ -464,15 +499,24 @@ class ExecutorContext:
             # print(f"[{self.get_datetime()}] [queue_mt]\tSleeping {queue_thread_timeout:.04f}s.")
             sleep(queue_thread_timeout)
     
-    def global_queue_cleanup(self) -> None:
-        self.global_queue_thread.stop()
+    def global_execute(self, worker_target_fn, output_processor_target_fn) -> None:
+        
+        if not worker_target_fn:
+            print("A target function is required for starting worker processes.")
+            return
 
-        for ix, thread in enumerate(self.prefetch_threads):
-            if thread.is_alive():
-                print(f"[{self.get_datetime()}] [master_p]\tForce Thread-{ix+1}.join()")
-                thread.join()
+        if not output_processor_target_fn:
+            print("A target function is required for starting output processor.")
+            return
 
-    def global_execute(self, target_fn, args=None) -> None:
+        if not self.worker_args:
+            print("Worker Arguments not provided. Please register worker args before starting executor.")
+            return
+
+        if not self.output_processor_args:
+            print("Output Processor Arguments not provided. Please register output processor args before starting executor.")
+            return
+
         # spawn a queue thread in master process
         for signame in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT, signal.SIGCHLD]:
             signal.signal(signame, signal.SIG_DFL)
@@ -482,9 +526,12 @@ class ExecutorContext:
 
         sleep(5)
         # spawn multiple processes that read from the queue
-        self.workers = self.spawn_workers(target_fn=target_fn, args=args)
+        self.workers = self.spawn_workers(target_fn=worker_target_fn, args=self.worker_args)
         for workers in self.workers:
             workers.start()
+
+        self.output_processor_proc = multiprocessing.Process(target=output_processor_target_fn, args=self.output_processor_args)
+        self.output_processor_proc.start()
 
         self.log_thread = threading.Thread(target=self.logs_fn)
         self.log_thread.start()
@@ -494,6 +541,31 @@ class ExecutorContext:
 
         for signame in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT, signal.SIGCHLD]:
             signal.signal(signame, self.signal_handler)
+    
+    def execute(self, worker_target_fn, output_processor_target_fn):
+        self.global_execute(worker_target_fn=worker_target_fn, output_processor_target_fn=output_processor_target_fn)
+
+    def register_worker_args(self, args=None):
+        if not args:
+            print("Worker arguments are required to start worker processes.")
+            return
+
+        self.worker_args = args
+
+    def register_output_processor_args(self, args=None):
+        if not args:
+            print("Output Processor arguments are required to start output processor.")
+            return
+
+        self.output_processor_args = args
+
+    def global_queue_cleanup(self) -> None:
+        self.global_queue_thread.stop()
+
+        for ix, thread in enumerate(self.prefetch_threads):
+            if thread.is_alive():
+                print(f"[{self.get_datetime()}] [master_p]\tForce Thread-{ix+1}.join()")
+                thread.join()
     
     def global_cleanup(self) -> None:
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
@@ -506,6 +578,10 @@ class ExecutorContext:
             print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}")
             if workers.is_alive():
                 workers.join()
+        
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Output Processor.")
+        if self.output_processor_proc.is_alive():
+            self.output_processor_proc.join()
 
         print(f"[{self.get_datetime()}] [master_p]\tTerminating Sys Thread")
         self.sys_thread.join(timeout=self.sys_timeout)
@@ -514,26 +590,13 @@ class ExecutorContext:
         self.log_thread.join(timeout=self.log_timeout)
         broker.close()
 
-    def local_execute(self, target_fn):
-        pass
-
-    def local_cleanup(self):
-        pass
-
-    def execute(self, target_fn, args=None):
-        if self.executor_mode == 0:
-            self.global_execute(target_fn, args)
-        else:
-            self.local_execute(target_fn)
-        return
-
     def cleanup(self):
-        if self.executor_mode == 0:
-            self.global_cleanup()
-        else:
-            self.local_cleanup()   
+        self.global_cleanup()
 
 if __name__ == "__main__":
+
+    from .worker import worker_fn
+    from output_processor.output import output_processor_fn
 
     config_path = os.path.join(os.getcwd(),"config", "evaluator.json")
 
@@ -574,13 +637,17 @@ if __name__ == "__main__":
         timeout=executor_config["timeout"],
         log_dir=executor_config["log_dir"],
         log_timeout=executor_config["log_timeout"],
-        sys_timeout=executor_config["sys_timeout"]
+        sys_timeout=executor_config["sys_timeout"],
+        output_processor_threads = executor_config["output_processor_threads"],
+        output_processor_timeout = executor_config["output_processor_timeout"],
+        store_lats=executor_config["store_lats"],
+        lats_dir=executor_config["lats_dir"],
     )
 
     print(executor)
 
-    executor.execute(
-        worker_fn, args=(
+    executor.register_worker_args(
+        args=(
             executor.log_path,
             executor.team_dict, 
             executor.running_dict, 
@@ -602,4 +669,24 @@ if __name__ == "__main__":
             backend_blacklist_duration
         )
     )
+
+    executor.register_output_processor_args(
+        args=(
+            1, # rank
+            executor.log_path,
+            executor.output_processor_event, 
+            executor.output_processor_threads,
+            executor.output_processor_timeout,
+            docker_config["shared_output_dir"],
+            os.path.join(os.getcwd(), "answer"),
+            executor.store_lats,
+            executor.lats_path
+        )
+    )
+
+    executor.execute(
+        worker_target_fn = worker_fn,
+        output_processor_target_fn = output_processor_fn
+    )
+
     signal.pause()

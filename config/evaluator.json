@@ -19,7 +19,11 @@
 		"timeout": 30,
 		"log_dir": "/home/vishalr/Desktop/backend-2022/executor-logs/",
 		"log_timeout": 120,
-		"sys_timeout": 1
+		"sys_timeout": 1,
+		"output_processor_threads": 1,
+		"output_processor_timeout": 30,
+		"store_lats": true,
+		"lats_dir": "/home/vishalr/Desktop/backend-2022/lats/"
 	},
 
 	"docker": {
@@ -30,7 +34,7 @@
 		"cpu_limit": 6,
 		"taskset": true,
 		"memory_limit": "8000m",
-		"shared_output_dir": "/home/vishalramesh01/backend-2022/output/",
+		"shared_output_dir": "/home/vishalr/Desktop/backend-2022/output/",
 		"docker_output_dir": "/output",
 		"docker_memswapiness": 0,
 		"spawn_wait": 40,

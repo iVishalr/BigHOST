@@ -1,10 +1,14 @@
 import os
 import time
 import smtplib
-from common import dbuser_rr, dbuser_ec
 
+from common.db import DataBase
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
+db = DataBase()
+dbuser_rr = db.metadata["RR"]["collections"]["users"]
+dbuser_ec = db.metadata["EC"]["collections"]["users"]
 
 class EmailingService:
     @staticmethod

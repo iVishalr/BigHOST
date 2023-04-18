@@ -10,7 +10,7 @@ import threading
 import subprocess
 
 from time import sleep
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from common import mail_queue
 from common.db import DataBase
@@ -20,6 +20,7 @@ from contextlib import closing
 from queue import PriorityQueue
 from datetime import datetime, timedelta
 from job_tracker import output_queue, docker_client
+from job_tracker.job import MRJob, SparkJob, KafkaJob
 
 def worker_fn(
         worker_rank: int,
@@ -50,16 +51,19 @@ def worker_fn(
     sys.stdout = Logger(os.path.join(worker_log_path, f'worker{worker_rank}_logs.txt'), 'a+')
     db = DataBase()
 
+    if not os.path.exists(host_output_dir):
+        os.makedirs(host_output_dir)
+
     def updateSubmission(marks, message, data, send_mail=False):
         timestamp = int(str(time.time_ns())[:10])
-        team_id = data['team_id']
-        assignment_id = data["assignment_id"]
-        submission_id = str(data["submission_id"])
+        team_id = data['teamId']
+        assignment_id = data["assignmentId"]
+        submission_id = str(data["submissionId"])
         doc = db.update("submissions", team_id, None, assignment_id, submission_id, marks, message, timestamp)
         
         if send_mail:
             mail_data = {
-                'teamId': data['team_id'],
+                'teamId': data['teamId'],
                 'submissionId': submission_id,
                 'submissionStatus': message,
                 'attachment': ""
@@ -220,74 +224,58 @@ def worker_fn(
                 continue
 
             queue_name, serialized_job = queue_data
-            job = pickle.loads(serialized_job)
+            job: Union[MRJob, SparkJob, KafkaJob] = pickle.loads(serialized_job)
+            job.record("processing_queue_exit")
             start = time.time()
 
-            key = job["team_id"]+"_"+job["assignment_id"]
+            key = job.team_id + "_" + job.assignment_id
             if key not in team_dict:
                 team_dict[key] = 0
                 running_dict[key] = 0
             else:
+                # TODO : make it work for Job Class
                 # if team already in team_dict, check whether they have been blacklisted currently, but still managed to submit a submission.
                 if blacklist_threshold - team_dict[key] < 0:
-                    res = {}
-                    res['team_id'] = job['team_id']
-                    res['assignment_id'] = job['assignment_id']
-                    res['submission_id'] = job['submission_id']
-                    res['blacklisted'] = True
-                    res['end_time'] = None
-                    res['status'] = 'BLACKLISTED_BEFORE'
-                    res['job_output'] = f"Job not processed as you were blacklisted!"
+                    job.blacklisted = True
+                    job.end_time = None
+                    job.status = 'BLACKLISTED_BEFORE'
+                    job.message = f"Job not processed as you were blacklisted!"
                     
-                    serialized_job_message = pickle.dumps(res)
-                    output_queue.enqueue(serialized_job_message)
+                    job.record("output_queue_entry")
+                    serialized_job = pickle.dumps(job)
+                    output_queue.enqueue(serialized_job)
                     continue
 
             team_dict[key] += 1
             running_dict[key] = 1
             status_code = 500
 
-            updateSubmission(marks=-1, message='Executing', data=job)
-            
+            updateSubmission(marks=-1, message='Executing', data=job.get_db_fields())
+            job.record("processing_start")
+
             try:
-                r = requests.post(request_url, data=job, timeout=float(job["timeout"]))
-                status_code = r.status_code
+                r = requests.post(request_url, data=job.__dict__, timeout=float(job.timeout))
                 res = json.loads(r.text)
-                res['team_id'] = job['team_id']
-                res['assignment_id'] = job['assignment_id']
-                res['submission_id'] = job['submission_id']
-                res['blacklisted'] = False
-                res['end_time'] = None
+                status_code = r.status_code
+                job.status = res["status"]
                 r.close()
 
             except requests.exceptions.Timeout:
-                if job["assignment_id"] != "A3T2":
+                if job.assignment_id != "A3T2":
                     # A3T2 does not use YARN to run jobs. Hence we cannot kill using YARN. 
                     kill_url = f"http://{docker_ip}:{port_list[2]}/kill_job"
                     kill_request = requests.get(kill_url)
                     kill_status = kill_request.status_code
-                res = {}
-                res['team_id'] = job['team_id']
-                res['assignment_id'] = job['assignment_id']
-                res['submission_id'] = job['submission_id']
-                res['blacklisted'] = False
-                res['end_time'] = None
-                res['status'] = 'FAILED'
-                res['job_output'] = f"Job Killed. Time Limit Exceeded!"
+                job.status = 'FAILED'
+                job.message = f"Job Killed. Time Limit Exceeded!"
             
             except:
-                res = {}
-                res['team_id'] = job['team_id']
-                res['assignment_id'] = job['assignment_id']
-                res['submission_id'] = job['submission_id']
-                res['blacklisted'] = False
-                res['end_time'] = None
-                res['status'] = 'FAILED'
+                job.status = 'FAILED'
 
                 if blacklist_threshold - team_dict[key] >= 0:
-                    res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
+                    job.message = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. {blacklist_threshold - team_dict[key]} Submissions away from being blacklisted.'
                 else:
-                    res['job_output'] = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. Team Blacklisted!'
+                    job.message = f'Container Crashed. Memory Limit Exceeded. Incident logged and tracked. Team Blacklisted!'
 
                 docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)
                 _ = docker_kill_process.wait()
@@ -304,28 +292,32 @@ def worker_fn(
                     host_output_dir, 
                     container_output_dir
                 )
+
+            job.record('processing_end')
             
-            if res['status'] != "FAILED":
+            if job.status != "FAILED":
                 team_dict[key] -= 1
                 running_dict[key] = 0
-                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
+                print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job.submission_id} Job Executed Successfully | Job : {job.status} Message : {job.message} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}")
             else:
                 running_dict[key] = 0
-                if "Container Crashed" in res['job_output']:
+                if "Container Crashed" in job.message:
                     if team_dict[key] <= blacklist_threshold:
-                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job.submission_id} Job Executed Successfully | Job : {job.status} Message : {job.message} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job.team_id} is {blacklist_threshold - team_dict[key]} submissions away from being blacklisted.")
                     else:
                         end_time =  datetime.now() + timedelta(minutes=blacklist_duration)
-                        blacklist_queue.put((end_time, {'team_id': job["team_id"], 'assignment_id': job["assignment_id"]}))
-                        res['blacklisted'] = True
-                        res['end_time'] = end_time
-                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job['team_id']} is blacklisted.")
+                        blacklist_queue.put((end_time, {'team_id': job.team_id, 'assignment_id': job.assignment_id}))
+                        job.blacklisted = True
+                        job.end_time = end_time
+                        print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job.submission_id} Job Executed Successfully | Job : {job.status} Message : {job.message} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}. Team : {job.team_id} is blacklisted.")
                 else:
                     team_dict[key] -= 1
-                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job['submission_id']} Job Executed Successfully | Job : {res['status']} Message : {res['job_output']} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
+                    print(f"[{get_datetime()}] [worker_{worker_rank}] [thread {rank}]\t{key}_{job.submission_id} Job Executed Successfully | Job : {job.status} Message : {job.message} Time Taken : {time.time()-start:.04f}s Status Code : {status_code}.")
             
-            serialized_job_message = pickle.dumps(res)
-            output_queue.enqueue(serialized_job_message)
+            
+            job.record("output_queue_entry")
+            serialized_job = pickle.dumps(job)
+            output_queue.enqueue(serialized_job)
 
         if event.is_set():
             docker_kill_process = subprocess.Popen([f"docker stop hadoop-c{worker_rank}{rank} && docker rm hadoop-c{worker_rank}{rank}"], shell=True, text=True)

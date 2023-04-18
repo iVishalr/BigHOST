@@ -5,6 +5,7 @@ compile-test/
 output/
 configs/
 logs/
+lats/
 # answer/A1T1
 # answer/A1T2
 *logs.txt

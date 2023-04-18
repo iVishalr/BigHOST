@@ -9,12 +9,13 @@ import filecmp
 import threading
 
 from time import sleep
-from typing import List
+from typing import List, Union
 from .preprocess import *
 from common import mail_queue
 from common.utils import Tee, get_datetime, Logger
+from job_tracker.job import MRJob, SparkJob, KafkaJob
 
-def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_timeout: int, submission_output_dir: str, answer_key_path: str):
+def output_processor_fn(rank: int, output_log_path: str, event: threading.Event, num_threads: int, op_timeout: int, submission_output_dir: str, answer_key_path: str, store_lats: bool = True, lats_path: str = "lats"):
     '''
     Takes a submissions output and compares to the expected output
     '''
@@ -23,7 +24,7 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
     # backup = sys.stdout
     # sys.stdout = Tee(sys.stdout, f)
 
-    sys.stdout = Logger("./output_processor_logs.txt", 'a+')
+    sys.stdout = Logger(os.path.join(output_log_path, "output_processor_logs.txt"), 'a+')
 
     from common.db import DataBase
     from output_processor import queue, broker
@@ -32,13 +33,16 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
     FILEPATH = submission_output_dir
     CORRECT_OUTPUT = answer_key_path
 
+    if store_lats and not os.path.exists(lats_path):
+        os.makedirs(lats_path)
+
     def thread_fn(rank, event: threading.Event):
         interval = 0.05
         timeout = 0.05
         process_slept = 0
         while not event.is_set():
 
-            if len(queue)==0:
+            if len(queue) == 0:
                 timeout += 0.05
                 interval += timeout
                 
@@ -66,27 +70,30 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
                 continue
 
             queue_name, serialized_data = output_data
-            data = pickle.loads(serialized_data)
+            job: Union[MRJob, SparkJob, KafkaJob] = pickle.loads(serialized_data)
+            
+            job.record("output_queue_exit")
+            
+            teamId = job.team_id
+            assignmentId = job.assignment_id
+            status = job.status
+            submissionId = job.submission_id
+            message = job.message
+            teamBlacklisted = job.blacklisted
+            end_time = job.end_time
 
-            teamId = data['team_id']
-            assignmentId = data['assignment_id']
-            status = data['status']
-            submissionId = str(data['submission_id'])
-            message = data['job_output']
-            teamBlacklisted = data['blacklisted']
-            end_time = data['end_time']
 
             FILEPATH_TEAM = os.path.join(FILEPATH, teamId, assignmentId, submissionId)
-            print(FILEPATH_TEAM)
-            os.system(f"sudo chown -R $USER:$USER {FILEPATH}/{teamId}")
+            # print(FILEPATH_TEAM)
+            # os.system(f"sudo chown -R $USER:$USER {FILEPATH}/{teamId}")
 
             if not os.path.exists(FILEPATH_TEAM):
                 status = "FAILED"
 
             timestamp = int(str(time.time_ns())[:10])
-            
             # If status is false, directly put 0
             if status == "FAILED":
+                job.record("output_processing_start")
                 blacklisted = None
                 if teamBlacklisted:
                     blacklisted = db.gen_blacklisted_record(True, f"You are blocked from submitting. Come back at {end_time.strftime('%d/%m/%Y %H:%M:%S')} to submit again.", timestamp)
@@ -103,6 +110,9 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
                     if os.path.exists(os.path.join(FILEPATH_TEAM, "error.txt")):
                         with open(os.path.join(FILEPATH_TEAM, "error.txt"), "r") as f:
                             error_logs = f.read()
+                
+                job.record("output_processing_end")
+                job.record("completed")
 
                 mail_data = {
                     'teamId': teamId,
@@ -114,13 +124,17 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
                 mail_queue.enqueue(mail_data)
             
             elif status == 'BLACKLISTED_BEFORE': # needed if a team gets blacklisted but team's submissions still exists in queue
+                job.record("output_processing_start")
+                job.record("output_processing_end")
+                job.record("completed")
                 print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId} Result : BLACKLISTED_BEFORE Message : {message}")
                 doc = db.update("submissions", teamId, None, assignmentId, submissionId, 0, message, timestamp)
             else:
                 # Has given outuput, need to check if it is corect
                 # preprocess the output files to match answer key if output follows certain conditions
                 output = None
-
+                job.record("output_processing_start")
+                
                 if "A1" in assignmentId:
                     preprocess_A1_output(teamId=teamId, assignmentId=assignmentId, output_path=os.path.join(FILEPATH_TEAM, "part-00000"), key_path=os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"))
 
@@ -141,12 +155,16 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
                         if os.path.exists(os.path.join(FILEPATH_TEAM, "part-00000")):
                             output = filecmp.cmp(os.path.join(FILEPATH_TEAM, "part-00000"), os.path.join(CORRECT_OUTPUT, assignmentId, "part-00000"), shallow=False)
                 
+                job.record("output_processing_end")
+                
                 if output:
-                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Passed")
+                    job.record("completed")
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} | Result : Passed")
                     doc = db.update("submissions", teamId, None, assignmentId, submissionId, 1, 'Passed', timestamp)
                     message = 'PASSED. Submission has passed our test cases. Good Job!'
                 else:
-                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} Result : Failed")
+                    job.record("completed")
+                    print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} | Result : Failed")
                     doc = db.update("submissions", teamId, None, assignmentId, submissionId, 0, 'Wrong Answer', timestamp)
                     message = 'FAILED. Submission did not passed our test cases. Try Again!'
                 
@@ -158,6 +176,20 @@ def output_processor_fn(rank: int, event: threading.Event, num_threads: int, op_
                 }
                 mail_data = pickle.dumps(mail_data)
                 mail_queue.enqueue(mail_data)
+
+            # write latency info to stdout (file in future hopefully :) )
+            lats = job.get_total_time()
+            lats_summary = lats["summary"]
+            print(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} | Wait : {lats_summary['waiting_time']:.4f}s Processing : {lats_summary['processing_time']:.4f}s Total: {lats_summary['total_time']:.4f}s")
+
+            if not store_lats:
+                continue
+
+            if not os.path.exists(os.path.join(lats_path, job.assignment_id)):
+                os.makedirs(os.path.join(lats_path, job.assignment_id))
+            
+            with open(os.path.join(lats_path, job.assignment_id, f"{job.assignment_id}_{job.submission_id}.json"), "w+") as lats_fp:
+                json.dump(lats, lats_fp, ensure_ascii=False, indent=4)
 
     #end of thread_fn
     threads : List[threading.Thread] = []
@@ -197,12 +229,15 @@ if __name__ == "__main__":
     executor_config = configs["executor"]
     docker_config = configs["docker"]
 
-    output_processor_fn(
-        rank=1, 
-        event=threading.Event(), 
-        num_threads=1,
-        op_timeout=executor_config["timeout"],
-        submission_output_dir=docker_config["shared_output_dir"], 
-        answer_key_path=os.path.join(os.getcwd(), "answer")
-    )
+    # output_processor_fn(
+    #     rank=1, 
+    #     event=threading.Event(), 
+    #     num_threads=1,
+    #     op_timeout=executor_config["timeout"],
+    #     submission_output_dir=docker_config["shared_output_dir"], 
+    #     answer_key_path=os.path.join(os.getcwd(), "answer"),
+    #     store_lats = executor_config["store_lats"],
+    #     lats_path = executor_config["lats_dir"]
+    # )
+
     signal.pause()
