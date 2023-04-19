@@ -7,11 +7,9 @@
         <img alt="BigHOST Logo" src="./doc/images/logo-light.png">
     </picture>
 </p>
-<br/>
-<hr/>
+<h1></h1>
 
 <p align="center">
-    <br/>
     <img src="./doc/images/arch.png" alt="BigHOST arch" width="auto" height="100%"></img>
     <br/>
     <br/>
