@@ -1,6 +1,10 @@
-<h1 align="center">
-    <span>BigHOST<br/></span>
-</h1>
+<p align="center">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./doc/images/logo-dark.png">
+        <source media="(prefers-color-scheme: light)" srcset="./doc/images/logo-light.png">
+        <img alt="BigHOST Logo" src="./doc/images/logo-light.png">
+    </picture>
+</p>
 
 <p align="center">
     <br/>
@@ -18,7 +22,7 @@ Cloud Computing and Big Data, PES University
 
 BigHOST is an autograding system that is developed to evaluate Big Data Assignments. BigHOST employs a simple architecture that is scalable and provides a fair environment for executing multiple Big Data jobs in parallel.
 
-## Table of Contents
+<h2>Table of Contents</h2>
 
 - [Introduction](#introduction)
 - [BigHOST Architecture](#bighost-architecture)
