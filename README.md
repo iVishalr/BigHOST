@@ -1,10 +1,14 @@
 <p align="center">
+    <br/>
+    <br/>
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="./doc/images/logo-dark.png">
         <source media="(prefers-color-scheme: light)" srcset="./doc/images/logo-light.png">
         <img alt="BigHOST Logo" src="./doc/images/logo-light.png">
     </picture>
 </p>
+<br/>
+<hr/>
 
 <p align="center">
     <br/>
