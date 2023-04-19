@@ -570,12 +570,12 @@ class ExecutorContext:
     def global_cleanup(self) -> None:
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
-        print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread")
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Queue Thread.")
         self.global_queue_cleanup()
         self.global_queue_thread.join(timeout=20)
 
         for ix, workers in enumerate(self.workers):
-            print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}")
+            print(f"[{self.get_datetime()}] [master_p]\tTerminating Worker {ix+1}.")
             if workers.is_alive():
                 workers.join()
         
@@ -583,7 +583,7 @@ class ExecutorContext:
         if self.output_processor_proc.is_alive():
             self.output_processor_proc.join()
 
-        print(f"[{self.get_datetime()}] [master_p]\tTerminating Sys Thread")
+        print(f"[{self.get_datetime()}] [master_p]\tTerminating Sys Thread.")
         self.sys_thread.join(timeout=self.sys_timeout)
         print(f"[{self.get_datetime()}] [master_p]\tTerminating Log Thread.")
         print(f"[{self.get_datetime()}] [master_p]\tPlease wait until log thread sends latest logs to backend.")
