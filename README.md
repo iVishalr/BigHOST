@@ -10,7 +10,7 @@
 <h1></h1>
 
 <p align="center">
-    <img src="./doc/images/arch.png" alt="BigHOST arch" width="auto" height="100%"></img>
+    <img src="./doc/images/arch.png" alt="BigHOST arch" width="100%" height="100%"></img>
     <br/>
     <br/>
     <strong>BigHOST: Automatic Assignment Grading System, CCGridW 2023</strong>
@@ -101,7 +101,7 @@ This extends the original BigHOST architecture to work with multiple evaluation 
 
 ## Documentation
 
-For documentation, please refer to [DOCUMENTATION.md](./doc/README.md).
+For documentation, please refer to [DOCUMENTATION.md](./doc/DOCUMENTATION.md).
 
 ## Project Setup
 
