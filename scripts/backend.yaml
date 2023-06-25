@@ -9,6 +9,6 @@ windows:
   - flask_backend:
       - sleep 10
       - gunicorn -w 4 --preload --timeout 90 --bind 0.0.0.0:9000 "flask_backend.backend:createApp()"
-  - mailer:
-      - sleep 12
-      - python3 -m common.mailer
+#   - mailer:
+#       - sleep 12
+#       - python3 -m common.mailer

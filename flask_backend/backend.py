@@ -448,6 +448,12 @@ def createApp():
             f.write(logs[logname])
             f.close()
 
+        logs = json.loads(data["lats_logs"])
+        for logname in logs:
+            f = open(os.path.join(executor_log_path, logname), "a+")
+            f.write(logs[logname])
+            f.close()
+
         logs = json.loads(data["syslogs"])
         for logname in logs:
             f = open(os.path.join(executor_log_path, logname), "a+")

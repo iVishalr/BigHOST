@@ -12,9 +12,6 @@ windows:
   - mailer:
       - sleep 10
       - python3 -m common.mailer
-  - output:
-      - sleep 10
-      - python3 -m output_processor.output
   - executor:
       - sleep 15
       - python3 -m job_tracker.executor

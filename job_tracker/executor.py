@@ -296,6 +296,16 @@ class ExecutorContext:
             logs[filename] = data
         return logs, new_offset
 
+    def get_lats_logs(self, path, offset):
+        logs = {}
+        new_offset = 0
+        for filename in os.listdir(path):
+            if ".txt" not in filename or 'lats' not in filename:
+                continue
+            data, new_offset = self.read_logs(os.path.join(path, filename), offset)
+            logs[filename] = data
+        return logs, new_offset
+
     def get_sys_logs(self, path, offset):
         logs = {}
         new_offset = 0
@@ -360,10 +370,11 @@ class ExecutorContext:
         url = f"http://{self.fetch_ip}:{self.fetch_port}/executor-log"
         executor_log_path = os.path.join(self.log_dir, self.executor_name, self.executor_uuid)
         
-        wlog_offset, oplog_offset, sys_log_offset = 0, 0, 0
+        wlog_offset, oplog_offset, latslog_offset, sys_log_offset = 0, 0, 0, 0
         while not self.global_queue_thread.stopped():
             wlogs, wlog_offset = self.get_worker_logs(executor_log_path, wlog_offset)
             oplogs, oplog_offset = self.get_op_logs(executor_log_path, oplog_offset)
+            latslogs, latslog_offset = self.get_lats_logs(executor_log_path, latslog_offset)
             syslogs, sys_log_offset = self.get_sys_logs(executor_log_path, sys_log_offset)
             
             payload = {
@@ -371,6 +382,7 @@ class ExecutorContext:
                 'executor_uuid': self.executor_uuid,
                 'worker_logs': json.dumps(wlogs),
                 'output_processor_logs': json.dumps(oplogs),
+                'lats_logs': json.dumps(latslogs),
                 'syslogs': json.dumps(syslogs),
             }
             
@@ -388,12 +400,15 @@ class ExecutorContext:
         # send final logs before stopping
         wlogs, wlog_offset = self.get_worker_logs(executor_log_path, wlog_offset)
         oplogs, oplog_offset = self.get_op_logs(executor_log_path, oplog_offset)
+        latslogs, latslog_offset = self.get_lats_logs(executor_log_path, latslog_offset)
         syslogs, sys_log_offset = self.get_sys_logs(executor_log_path, sys_log_offset)
+        
         payload = {
             'executor_name': self.executor_name,
             'executor_uuid': self.executor_uuid,
             'worker_logs': json.dumps(wlogs),
             'output_processor_logs': json.dumps(oplogs),
+            'lats_logs': json.dumps(latslogs),
             'syslogs': json.dumps(syslogs),
         }
 

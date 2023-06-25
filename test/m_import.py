@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 import sys
+import hadoop
 
 def mapper():
 
     f = open("./m.py", "r").read()
-
-    while(True):
-        pass
 
     for line in sys.stdin:
         data=line.strip().split()

@@ -21,7 +21,7 @@ def reducer():
             s = f"{key} [{val}"
             f.write(f"{key},1\n")
     print(s+"]")
-    ullu()
+    foo()
     f.close()
 
 if __name__ == '__main__':

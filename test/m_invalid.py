@@ -1,4 +1,5 @@
 import sys
+import hadoop
 
 def mapper():
     for line in sys.stdin:

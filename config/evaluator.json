@@ -1,13 +1,13 @@
 {
 	"backend": {
 		"name": "backend",
-		"log_dir": "/home/vishalr/Desktop/backend-2022/logs/",
-		"config_dir": "/home/vishalr/Desktop/backend-2022/configs/"
+		"log_dir": "/home/vishalramesh01/backend-2022/logs/",
+		"config_dir": "/home/vishalramesh01/backend-2022/configs/"
 	},
 
 	"executor": {
-		"name": "Assignment2",
-		"num_backends": 2,
+		"name": "eval-test",
+		"num_backends": 1,
 		"num_workers": 1,
 		"fetch_port": 9000,
 		"fetch_route": "get-jobs",
@@ -31,7 +31,7 @@
 		"docker_port": 10000,
 		"docker_route": "run_job",
 		"docker_image": "hadoop-3.2.2:0.1",
-		"cpu_limit": 6,
+		"cpu_limit": 2,
 		"taskset": true,
 		"memory_limit": "8000m",
 		"shared_output_dir": "/home/vishalr/Desktop/backend-2022/output/",

@@ -25,7 +25,7 @@ def output_processor_fn(rank: int, output_log_path: str, event: threading.Event,
     # sys.stdout = Tee(sys.stdout, f)
 
     sys.stdout = Logger(os.path.join(output_log_path, "output_processor_logs.txt"), 'a+')
-
+    lats_f = open(os.path.join(output_log_path, "lats.txt"), "a+")
     from common.db import DataBase
     from output_processor import queue, broker
 
@@ -191,6 +191,9 @@ def output_processor_fn(rank: int, output_log_path: str, event: threading.Event,
             with open(os.path.join(lats_path, job.assignment_id, f"{job.assignment_id}_{job.submission_id}.json"), "w+") as lats_fp:
                 json.dump(lats, lats_fp, ensure_ascii=False, indent=4)
 
+            lats_f.write(f"[{get_datetime()}] [output_processor]\tTeam : {teamId} Assignment ID : {assignmentId}_{submissionId} | Wait : {lats_summary['waiting_time']:.4f}s Processing : {lats_summary['processing_time']:.4f}s Total: {lats_summary['total_time']:.4f}s\n")
+            lats_f.flush()
+        
     #end of thread_fn
     threads : List[threading.Thread] = []
     thread_events : List[threading.Event] = []
