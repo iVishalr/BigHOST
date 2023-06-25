@@ -8,6 +8,7 @@ logs/
 lats/
 # answer/A1T1
 # answer/A1T2
+*lats.txt
 *logs.txt
 # part-00000
 # w

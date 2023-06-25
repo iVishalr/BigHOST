@@ -1,5 +1,0 @@
-[21/04/2023 16:03:13] [output_processor]	Team : BD1_ADMIN_09 Assignment ID : A2T1_1682075960 | Wait : 11.2492s Processing : 31.2768s Total: 45.2602s
-[21/04/2023 16:03:41] [output_processor]	Team : BD1_ADMIN_09 Assignment ID : A2T1_1682081177 | Wait : 37.2587s Processing : 31.4242s Total: 70.8305s
-[21/04/2023 16:04:09] [output_processor]	Team : BD1_ADMIN_09 Assignment ID : A2T1_1682074946 | Wait : 63.9851s Processing : 29.8131s Total: 96.7524s
-[21/04/2023 16:04:37] [output_processor]	Team : BD1_ADMIN_09 Assignment ID : A2T1_1682081884 | Wait : 90.8077s Processing : 29.1787s Total: 121.9034s
-[21/04/2023 16:05:06] [output_processor]	Team : BD1_ADMIN_09 Assignment ID : A2T1_1682079652 | Wait : 111.1782s Processing : 30.1985s Total: 147.2870s
