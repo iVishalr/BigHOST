@@ -9,9 +9,6 @@ windows:
   - queuer:
       - sleep 10
       - gunicorn -w 2 --preload --timeout 90 --bind 0.0.0.0:10001 "job_tracker.queuer:app"
-  - mailer:
-      - sleep 10
-      - python3 -m common.mailer
   - executor:
       - sleep 15
       - python3 -m job_tracker.executor

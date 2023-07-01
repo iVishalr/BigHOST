@@ -18,7 +18,8 @@ parser.add_argument("--nreqs", type=int, default=64, help="Number of requests to
 
 args = parser.parse_args()
 
-url = "http://35.213.133.27:9000/sanity-check"
+# url = "http://35.213.133.27:9000/sanity-check"
+url = "http://127.0.0.1:9000/sanity-check"
 
 data = {'teamId': 'BD1_ADMIN_09', 
         'assignmentId': 'A2T1', 
